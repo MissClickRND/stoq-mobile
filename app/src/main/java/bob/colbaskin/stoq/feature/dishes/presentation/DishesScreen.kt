@@ -14,7 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,8 +41,12 @@ fun DishesScreen(
     val colors = LocalColors.current
     val allDishes = viewModel.allDishes
     val tabs = listOf("Все", "Горячее", "Салаты", "Десерты", "В стоп-листе")
+    var showAddDialog by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+    var newPrice by remember { mutableStateOf("") }
+    Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(colors.background),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = StoqSpacing.ScreenHorizontal, top = 8.dp, end = StoqSpacing.ScreenHorizontal, bottom = StoqSpacing.Large),
         verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)
     ) {
@@ -61,8 +65,17 @@ fun DishesScreen(
             }
         }
         items(state.dishes, key = Dish::id) { dish -> DishCard(dish) { onDishClick(dish.id) } }
-        item { StoqPrimaryButton(text = "Добавить блюдо", onClick = {}, modifier = Modifier.fillMaxWidth()) }
+        item { Spacer(Modifier.height(76.dp)) }
     }
+    FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = colors.primary, contentColor = colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить блюдо") }
+    }
+    if (showAddDialog) AlertDialog(
+        onDismissRequest = { showAddDialog = false },
+        title = { Text("Новое блюдо") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(newName, { newName = it }, label = { Text("Название") }, singleLine = true); OutlinedTextField(newPrice, { newPrice = it.filter(Char::isDigit) }, label = { Text("Цена") }, singleLine = true) } },
+        confirmButton = { TextButton(onClick = { val price = newPrice.toIntOrNull(); if (newName.isNotBlank() && price != null) { viewModel.addDish(newName, price); newName = ""; newPrice = ""; showAddDialog = false } }) { Text("Добавить") } },
+        dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("Отмена") } }
+    )
 }
 
 @Composable
