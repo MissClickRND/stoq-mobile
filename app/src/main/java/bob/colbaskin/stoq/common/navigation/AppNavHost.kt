@@ -20,6 +20,7 @@ import bob.colbaskin.stoq.common.userprefs.data.model.UserPreferences
 import bob.colbaskin.stoq.feature.auth.presentation.accessrequest.AccessRequestScreen
 import bob.colbaskin.stoq.feature.auth.presentation.restaurantregistration.RestaurantRegistrationScreen
 import bob.colbaskin.stoq.feature.auth.presentation.signin.SignInScreen
+import bob.colbaskin.stoq.feature.main.presentation.MainNavigation
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -85,11 +86,10 @@ fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
             )
         }
         composable<AuthenticatedDestination> {
-            AuthenticatedScreen()
+            MainNavigation(user = uiState.data.user)
         }
     }
 }
-
 private fun getRootStartDestination(authStatus: AuthConfig): Any = when (authStatus) {
     AuthConfig.Authenticated -> AuthenticatedDestination
     AuthConfig.NotAuthenticated -> SignInDestination
@@ -115,25 +115,6 @@ private fun AccessRequestSentScreen(onBackToSignIn: () -> Unit) {
             text = "Вернуться ко входу",
             onClick = onBackToSignIn,
             modifier = Modifier.padding(top = StoqSpacing.ExtraLarge)
-        )
-    }
-}
-
-@Composable
-private fun AuthenticatedScreen() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(StoqSpacing.ScreenHorizontal),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = "Добро пожаловать в STOQ", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text = "Основные рабочие разделы будут добавлены следующими фичами.",
-            modifier = Modifier.padding(top = StoqSpacing.Small),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
