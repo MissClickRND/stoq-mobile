@@ -10,40 +10,52 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.TrendingUp
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.theme.ColorTokens
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
@@ -54,10 +66,13 @@ private val DashboardPurple = Color(0xFF9864E9)
 private val DashboardRed = Color(0xFFFF5A68)
 private val DashboardYellow = Color(0xFFFFBE35)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen() {
     var selectedRange by remember { mutableIntStateOf(1) }
     var selectedMetric by remember { mutableIntStateOf(1) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDateRangePickerState()
     val ranges = listOf("Сегодня", "7 дней", "30 дней")
     val metrics = listOf("Выручка", "Прибыль", "Заказы")
 
@@ -76,16 +91,16 @@ fun DashboardScreen() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(16.dp))
-                AssistChip(
-                    onClick = { selectedRange = 3 },
-                    label = { Text("01.06.2024 – 30.06.2024") },
-                    leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(18.dp)) },
-                    colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surface)
+                DateRangeButton(
+                    text = datePickerState.selectedStartDateMillis?.let { start ->
+                        datePickerState.selectedEndDateMillis?.let { end -> "${formatDate(start)} – ${formatDate(end)}" }
+                    } ?: "01.06.2024 – 30.06.2024",
+                    onClick = { showDatePicker = true }
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ranges.forEachIndexed { index, label ->
-                        FilterChip(label, selected = selectedRange == index) { selectedRange = index }
+                        FilterChip(label, selected = selectedRange == index, Modifier.weight(1f)) { selectedRange = index }
                     }
                 }
             }
@@ -116,54 +131,107 @@ fun DashboardScreen() {
         item { RecommendationBanner() }
         item { Spacer(Modifier.height(12.dp)) }
     }
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = { Text("Применить", modifier = Modifier.padding(16.dp).clickable { selectedRange = 3; showDatePicker = false }, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
+            dismissButton = { Text("Отмена", modifier = Modifier.padding(16.dp).clickable { showDatePicker = false }) }
+        ) { DateRangePicker(state = datePickerState, modifier = Modifier.weight(1f, fill = false)) }
+    }
+}
+
+@Composable
+private fun DateRangeButton(text: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().height(48.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.medium,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(10.dp))
+            Text(text, style = MaterialTheme.typography.labelLarge)
+        }
+    }
 }
 
 @Composable
 private fun FilterChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val background = if (selected) ColorTokens.LightPrimaryContainer else MaterialTheme.colorScheme.surface
+    val background = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
     Surface(
         modifier = modifier.height(42.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onClick),
         color = background,
         shape = MaterialTheme.shapes.medium
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+            Text(label, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
         }
     }
 }
 
 @Composable
 private fun MetricChart() {
-    Canvas(modifier = Modifier.fillMaxWidth().height(180.dp)) {
-        val values = listOf(.28f, .42f, .32f, .58f, .39f, .61f, .54f, .64f, .47f, .36f, .51f, .42f, .71f, .67f, .83f, .66f, .62f)
-        val step = size.width / (values.size - 1)
-        val path = Path()
-        values.forEachIndexed { index, value ->
-            val point = androidx.compose.ui.geometry.Offset(index * step, size.height * (1f - value))
-            if (index == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = .24f)
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column {
+        Row {
+            Column(modifier = Modifier.height(172.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                listOf("200 000", "150 000", "100 000", "50 000", "0").forEach { Text(it, color = muted, style = MaterialTheme.typography.bodySmall) }
+            }
+            Spacer(Modifier.width(10.dp))
+            Box(modifier = Modifier.weight(1f).height(172.dp)) {
+                Canvas(Modifier.fillMaxWidth().height(172.dp)) {
+                    val values = listOf(.30f, .40f, .32f, .62f, .48f, .37f, .50f, .61f, .54f, .69f, .46f, .57f, .38f, .45f, .34f, .43f, .42f, .70f, .66f, .83f, .69f, .62f, .65f)
+                    val step = size.width / (values.size - 1)
+                    repeat(5) { line -> drawLine(gridColor, androidx.compose.ui.geometry.Offset(0f, line * size.height / 4f), androidx.compose.ui.geometry.Offset(size.width, line * size.height / 4f)) }
+                    repeat(7) { line -> drawLine(gridColor, androidx.compose.ui.geometry.Offset(line * size.width / 6f, 0f), androidx.compose.ui.geometry.Offset(line * size.width / 6f, size.height)) }
+                    val linePath = Path()
+                    values.forEachIndexed { index, value ->
+                        val point = androidx.compose.ui.geometry.Offset(index * step, size.height * (1f - value))
+                        if (index == 0) linePath.moveTo(point.x, point.y) else linePath.lineTo(point.x, point.y)
+                    }
+                    val fillPath = Path().apply { addPath(linePath); lineTo(size.width, size.height); lineTo(0f, size.height); close() }
+                    drawPath(fillPath, Brush.verticalGradient(listOf(DashboardGreen.copy(alpha = .26f), DashboardGreen.copy(alpha = .02f))))
+                    drawPath(linePath, DashboardGreen, style = Stroke(width = 6f, cap = StrokeCap.Round))
+                    val markerIndex = 10
+                    val marker = androidx.compose.ui.geometry.Offset(markerIndex * step, size.height * (1f - values[markerIndex]))
+                    drawLine(DashboardGreen.copy(alpha = .55f), androidx.compose.ui.geometry.Offset(marker.x, marker.y), androidx.compose.ui.geometry.Offset(marker.x, size.height), strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 7f)))
+                    drawCircle(Color.White, 12f, marker)
+                    drawCircle(DashboardGreen, 7f, marker)
+                }
+                Surface(modifier = Modifier.align(Alignment.TopCenter).offset(x = (-18).dp), color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small, shadowElevation = 4.dp) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { Text("15.06.2024", style = MaterialTheme.typography.bodySmall, color = muted); Text("● 142 300 ₽", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = DashboardGreen) }
+                }
+            }
         }
-        drawPath(path, DashboardGreen, style = Stroke(width = 6f, cap = StrokeCap.Round))
-        values.forEachIndexed { index, value ->
-            if (index % 4 == 0) drawCircle(Color(0x1A22A51C), radius = 18f, center = androidx.compose.ui.geometry.Offset(index * step, size.height * (1f - value)))
-        }
+        Spacer(Modifier.height(6.dp))
+        Row(modifier = Modifier.padding(start = 72.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { listOf("01.06", "05.06", "09.06", "13.06", "17.06", "21.06", "25.06", "30.06").forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) } }
     }
 }
 
 @Composable
 private fun MetricGrid() {
     val items = listOf(
-        Triple("Выручка", "487 320 ₽", "↑ 18%"), Triple("Прибыль", "162 450 ₽", "↑ 23%"),
-        Triple("Заказы", "248", "↑ 12%"), Triple("Средний чек", "1 965 ₽", "↑ 6%")
+        DashboardMetric("Выручка", "487 320 ₽", "↑ 18%", Icons.Outlined.AccountBalanceWallet, DashboardGreen),
+        DashboardMetric("Прибыль", "162 450 ₽", "↑ 23%", Icons.Outlined.BarChart, DashboardGreen),
+        DashboardMetric("Заказы", "248", "↑ 12%", Icons.Outlined.ShoppingCart, DashboardRed),
+        DashboardMetric("Средний чек", "1 965 ₽", "↑ 6%", Icons.Outlined.Group, MaterialTheme.colorScheme.onSurfaceVariant)
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(horizontal = 20.dp)) {
         items.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { (title, value, growth) ->
+                row.forEach { metric ->
                     StoqCard(modifier = Modifier.weight(1f)) {
-                        Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.height(6.dp))
-                        Text(value, style = MaterialTheme.typography.titleLarge)
-                        Text(growth, color = DashboardGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(42.dp).clip(CircleShape).background(metric.tint.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Icon(metric.icon, null, tint = metric.tint) }
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(metric.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(metric.value, style = MaterialTheme.typography.titleMedium)
+                                Text(metric.growth, color = DashboardGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                     }
                 }
             }
@@ -173,15 +241,19 @@ private fun MetricGrid() {
 
 @Composable
 private fun LowStockSection() {
-    val products = listOf("Помидоры свежие" to "5 кг", "Сыр моцарелла" to "3 кг", "Молоко 3,2%" to "4 л")
+    val products = listOf(
+        StockProduct("Помидоры свежие", "5 кг", "72348", R.drawable.auth_tomatoes),
+        StockProduct("Сыр моцарелла", "3 кг", "72349", null),
+        StockProduct("Молоко 3,2%", "4 л", "72350", null)
+    )
     SectionCard("Товары с низким остатком", "Все товары") {
-        products.forEachIndexed { index, (name, amount) ->
+        products.forEachIndexed { index, product ->
             if (index != 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .35f))
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Inventory2, null, tint = DashboardRed)
+            Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                ProductAvatar(product.avatarRes)
                 Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) { Text(name, fontWeight = FontWeight.Medium); Text("Артикул 00${123 + index * 331}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Text(amount, color = DashboardRed, fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f)) { Text(product.name, fontWeight = FontWeight.Medium); Text("Артикул: ${product.id}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Text(product.amount, color = DashboardRed, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -193,7 +265,7 @@ private fun PromotionSection() {
     SectionCard("Блюда для продвижения", "Все блюда") {
         dishes.forEachIndexed { index, (name, price) ->
             if (index != 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .35f))
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.ReceiptLong, null, tint = DashboardGreen)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -249,7 +321,7 @@ private fun RecommendationBanner() {
 @Composable
 private fun SectionCard(title: String, action: String, content: @Composable () -> Unit) {
     StoqCard(modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) { Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); Text(action, color = DashboardGreen, style = MaterialTheme.typography.labelLarge) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) { Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); Text(action, modifier = Modifier.clip(MaterialTheme.shapes.small).clickable { }.padding(6.dp), color = DashboardGreen, style = MaterialTheme.typography.labelLarge) }
         Spacer(Modifier.height(8.dp))
         content()
     }
@@ -257,3 +329,19 @@ private fun SectionCard(title: String, action: String, content: @Composable () -
 
 private fun metricValue(index: Int) = listOf("487 320 ₽", "162 450 ₽", "248")[index]
 private fun metricGrowth(index: Int) = listOf("18%", "23%", "12%")[index]
+
+private data class DashboardMetric(val title: String, val value: String, val growth: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: Color)
+private data class StockProduct(val name: String, val amount: String, val id: String, val avatarRes: Int?)
+
+@Composable
+private fun ProductAvatar(avatarRes: Int?) {
+    Box(modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+        if (avatarRes != null) {
+            androidx.compose.foundation.Image(painterResource(avatarRes), null, modifier = Modifier.size(48.dp), contentScale = ContentScale.Crop)
+        } else {
+            Icon(Icons.Outlined.Inventory2, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun formatDate(millis: Long): String = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(millis))
