@@ -8,24 +8,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
+import bob.colbaskin.stoq.R
 
 private const val DefaultAvatarUrl =
     "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=144&q=80"
 
 @Composable
 fun StoqTopBar(avatarUrl: String?) {
-    val context = LocalContext.current
+    val logoResource = if (isSystemInDarkTheme()) R.drawable.stoq_logo_dark else R.drawable.stoq_logo_light
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -37,11 +38,8 @@ fun StoqTopBar(avatarUrl: String?) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = StoqSpacing.ScreenHorizontal),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data("file:///android_asset/stoq_topbar_logo.svg")
-                    .decoderFactory(SvgDecoder.Factory())
-                    .build(),
+            Image(
+                painter = painterResource(logoResource),
                 contentDescription = "STOQ",
                 modifier = Modifier.size(width = 96.dp, height = 34.dp),
                 contentScale = ContentScale.Fit
