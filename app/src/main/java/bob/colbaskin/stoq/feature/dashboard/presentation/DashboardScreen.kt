@@ -83,7 +83,7 @@ fun DashboardScreen() {
         verticalArrangement = Arrangement.spacedBy(StoqSpacing.Large)
     ) {
         item {
-            Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp)) {
+            Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)) {
                 Text("Дашборд", style = MaterialTheme.typography.headlineMedium)
                 Text(
                     "Ключевые показатели вашего ресторана",

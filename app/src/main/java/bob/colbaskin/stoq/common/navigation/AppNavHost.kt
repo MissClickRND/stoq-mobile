@@ -69,7 +69,7 @@ fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
             )
         }
         composable<AuthenticatedDestination> {
-            MainNavigation()
+            MainNavigation(user = uiState.data.user)
         }
     }
 }

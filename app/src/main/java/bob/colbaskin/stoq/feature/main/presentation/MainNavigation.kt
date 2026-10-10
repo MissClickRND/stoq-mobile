@@ -11,6 +11,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import bob.colbaskin.stoq.common.designsystem.components.BottomBarItem
 import bob.colbaskin.stoq.common.designsystem.components.StoqBottomBar
+import bob.colbaskin.stoq.common.designsystem.components.StoqTopBar
+import bob.colbaskin.stoq.feature.auth.domain.model.AuthUser
 import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
 import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
 import compose.icons.TablerIcons
@@ -35,12 +37,13 @@ private val mainSections = listOf(
 )
 
 @Composable
-fun MainNavigation() {
+fun MainNavigation(user: AuthUser?) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
+        topBar = { StoqTopBar(avatarUrl = user?.avatarUrl) },
         bottomBar = {
             StoqBottomBar(
                 items = mainSections,
