@@ -87,6 +87,7 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.protobuf.kotlin.lite)
     implementation(libs.androidx.material.icons.extended)
+    implementation(libs.compose.icons.tabler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
