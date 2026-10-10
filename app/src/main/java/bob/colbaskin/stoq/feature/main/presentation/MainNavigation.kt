@@ -11,6 +11,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import bob.colbaskin.stoq.common.designsystem.components.BottomBarItem
 import bob.colbaskin.stoq.common.designsystem.components.StoqBottomBar
+import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -59,7 +60,7 @@ fun MainNavigation() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(DashboardRoute) {
-                SectionPlaceholderScreen("Дашборд", "Сводка по работе ресторана появится здесь.", TablerIcons.ChartBar)
+                DashboardScreen()
             }
             composable(ProductsRoute) {
                 SectionPlaceholderScreen("Склад", "Здесь будут продукты, остатки и инвентаризация.", TablerIcons.Package)
