@@ -9,6 +9,7 @@ import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.core.toUiState
 import bob.colbaskin.stoq.feature.auth.domain.AuthRepository
 import bob.colbaskin.stoq.feature.auth.domain.model.AccessRequest
+import bob.colbaskin.stoq.feature.auth.domain.model.UserRole
 import bob.colbaskin.stoq.feature.auth.presentation.AuthValidation
 import bob.colbaskin.stoq.feature.auth.presentation.hasErrors
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,17 +40,13 @@ class AccessRequestViewModel @Inject constructor(
         val fieldError = AuthValidation.accessRequest(
             fullName = state.fullName,
             email = state.email,
-            companyName = state.companyName,
-            role = state.selectedRole,
-            reason = state.reason,
-            consentAccepted = state.consentAccepted
+            companyName = state.companyName
         )
         if (fieldError.hasErrors()) {
             state = state.copy(fieldError = fieldError)
             return
         }
         state = state.copy(requestState = UiState.Loading)
-        val selectedRole = requireNotNull(state.selectedRole)
         viewModelScope.launch {
             state = state.copy(
                 requestState = authRepository.requestAccess(
@@ -57,8 +54,8 @@ class AccessRequestViewModel @Inject constructor(
                         fullName = state.fullName.trim(),
                         email = state.email.trim(),
                         companyName = state.companyName.trim(),
-                        requestedRole = selectedRole,
-                        reason = state.reason.trim()
+                        requestedRole = UserRole.Manager,
+                        reason = "Запрос доступа через мобильное приложение"
                     )
                 ).toUiState()
             )

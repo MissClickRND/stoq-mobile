@@ -12,12 +12,15 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import bob.colbaskin.stoq.common.designsystem.components.BottomBarItem
 import bob.colbaskin.stoq.common.designsystem.components.StoqBottomBar
+import bob.colbaskin.stoq.common.designsystem.components.StoqTopBar
+import bob.colbaskin.stoq.feature.auth.domain.model.AuthUser
 import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishDetailsScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishCollectionScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishesScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.CreateSupplyScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SuppliesScreen
+import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -46,12 +49,13 @@ private val mainSections = listOf(
 )
 
 @Composable
-fun MainNavigation() {
+fun MainNavigation(user: AuthUser?) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
+        topBar = { StoqTopBar(avatarUrl = user?.avatarUrl) },
         bottomBar = {
             StoqBottomBar(
                 items = mainSections,
@@ -79,7 +83,7 @@ fun MainNavigation() {
                 DashboardScreen()
             }
             composable(ProductsRoute) {
-                SectionPlaceholderScreen("Склад", "Здесь будут продукты, остатки и инвентаризация.", TablerIcons.Package)
+                StorageScreen()
             }
             composable(SupplyRoute) {
                 SuppliesScreen(onCreateSupply = { navController.navigate("create_supply") })

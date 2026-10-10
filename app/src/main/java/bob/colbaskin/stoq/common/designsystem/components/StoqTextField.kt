@@ -32,7 +32,9 @@ fun StoqTextField(
     singleLine: Boolean = true,
     minLines: Int = 1,
     visualTransformation: VisualTransformation = VisualTransformation.None,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    trailingIcon: ImageVector? = null,
+    onTrailingIconClick: (() -> Unit)? = null
 ) {
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
@@ -66,6 +68,17 @@ fun StoqTextField(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        },
+        trailingIcon = trailingIcon?.let { icon ->
+            {
+                androidx.compose.material3.IconButton(onClick = { onTrailingIconClick?.invoke() }) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = "Показать или скрыть пароль",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         supportingText = supportingText?.let { { Text(it) } },

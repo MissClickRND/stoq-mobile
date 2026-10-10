@@ -18,6 +18,7 @@ import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.userprefs.data.model.AuthConfig
 import bob.colbaskin.stoq.common.userprefs.data.model.UserPreferences
 import bob.colbaskin.stoq.feature.auth.presentation.accessrequest.AccessRequestScreen
+import bob.colbaskin.stoq.feature.auth.presentation.restaurantregistration.RestaurantRegistrationScreen
 import bob.colbaskin.stoq.feature.auth.presentation.signin.SignInScreen
 import bob.colbaskin.stoq.feature.main.presentation.MainNavigation
 import kotlinx.serialization.Serializable
@@ -27,6 +28,9 @@ data object SignInDestination
 
 @Serializable
 data object AccessRequestDestination
+
+@Serializable
+data object RestaurantRegistrationDestination
 
 @Serializable
 data object AccessRequestSentDestination
@@ -41,7 +45,8 @@ fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
     NavHost(navController = navController, startDestination = getRootStartDestination(uiState.data.authStatus)) {
         composable<SignInDestination> {
             SignInScreen(
-                onRequestAccess = { navController.navigate(AccessRequestDestination) },
+                onRestaurantRegistration = { navController.navigate(RestaurantRegistrationDestination) },
+                onEmployeeRegistration = { navController.navigate(AccessRequestDestination) },
                 onSignedIn = {
                     navController.navigate(AuthenticatedDestination) {
                         popUpTo(SignInDestination) { inclusive = true }
@@ -56,7 +61,19 @@ fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
                         popUpTo(AccessRequestDestination) { inclusive = true }
                     }
                 },
-                onSignIn = { navController.popBackStack() }
+                onSignIn = { navController.navigate(SignInDestination) { popUpTo(SignInDestination) { inclusive = true } } },
+                onRestaurantRegistration = { navController.navigate(RestaurantRegistrationDestination) }
+            )
+        }
+        composable<RestaurantRegistrationDestination> {
+            RestaurantRegistrationScreen(
+                onSignIn = { navController.navigate(SignInDestination) { popUpTo(SignInDestination) { inclusive = true } } },
+                onEmployeeRegistration = { navController.navigate(AccessRequestDestination) },
+                onRestaurantCreated = {
+                    navController.navigate(AuthenticatedDestination) {
+                        popUpTo(SignInDestination) { inclusive = true }
+                    }
+                }
             )
         }
         composable<AccessRequestSentDestination> {
@@ -69,7 +86,7 @@ fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
             )
         }
         composable<AuthenticatedDestination> {
-            MainNavigation()
+            MainNavigation(user = uiState.data.user)
         }
     }
 }
