@@ -24,9 +24,6 @@ import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material.icons.outlined.TrendingUp
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,7 +54,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
-import bob.colbaskin.stoq.common.designsystem.theme.ColorTokens
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 
 private val DashboardGreen = Color(0xFF22A51C)
