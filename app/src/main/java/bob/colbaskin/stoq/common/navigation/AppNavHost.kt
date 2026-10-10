@@ -19,6 +19,7 @@ import bob.colbaskin.stoq.common.userprefs.data.model.AuthConfig
 import bob.colbaskin.stoq.common.userprefs.data.model.UserPreferences
 import bob.colbaskin.stoq.feature.auth.presentation.accessrequest.AccessRequestScreen
 import bob.colbaskin.stoq.feature.auth.presentation.signin.SignInScreen
+import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -104,19 +105,5 @@ private fun AccessRequestSentScreen(onBackToSignIn: () -> Unit) {
 
 @Composable
 private fun AuthenticatedScreen() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(StoqSpacing.ScreenHorizontal),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = "Добро пожаловать в STOQ", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text = "Основные рабочие разделы будут добавлены следующими фичами.",
-            modifier = Modifier.padding(top = StoqSpacing.Small),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
+    DashboardScreen()
 }
