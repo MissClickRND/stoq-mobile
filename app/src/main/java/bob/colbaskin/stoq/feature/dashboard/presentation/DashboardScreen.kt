@@ -3,6 +3,7 @@ package bob.colbaskin.stoq.feature.dashboard.presentation
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,13 +49,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
+import kotlin.math.roundToInt
 
 private val DashboardGreen = Color(0xFF22A51C)
 private val DashboardBlue = Color(0xFF319BF4)
@@ -169,6 +173,13 @@ private fun FilterChip(label: String, selected: Boolean, modifier: Modifier = Mo
 private fun MetricChart() {
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = .24f)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val values = remember { listOf(.30f, .40f, .32f, .62f, .48f, .37f, .50f, .61f, .54f, .69f, .46f, .57f, .38f, .45f, .34f, .43f, .42f, .70f, .66f, .83f, .69f, .62f, .65f) }
+    val labels = remember { listOf("01.06", "02.06", "03.06", "04.06", "05.06", "06.06", "07.06", "08.06", "09.06", "10.06", "15.06", "16.06", "17.06", "18.06", "19.06", "20.06", "21.06", "24.06", "25.06", "26.06", "27.06", "28.06", "30.06") }
+    var selectedIndex by remember { mutableIntStateOf(10) }
+    var chartWidth by remember { mutableStateOf(0f) }
+    fun selectAt(x: Float) {
+        if (chartWidth > 0f) selectedIndex = (x / chartWidth * (values.size - 1)).roundToInt().coerceIn(0, values.lastIndex)
+    }
     Column {
         Row {
             Column(modifier = Modifier.height(172.dp), verticalArrangement = Arrangement.SpaceBetween) {
@@ -176,8 +187,18 @@ private fun MetricChart() {
             }
             Spacer(Modifier.width(10.dp))
             Box(modifier = Modifier.weight(1f).height(172.dp)) {
-                Canvas(Modifier.fillMaxWidth().height(172.dp)) {
-                    val values = listOf(.30f, .40f, .32f, .62f, .48f, .37f, .50f, .61f, .54f, .69f, .46f, .57f, .38f, .45f, .34f, .43f, .42f, .70f, .66f, .83f, .69f, .62f, .65f)
+                Canvas(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(172.dp)
+                        .onSizeChanged { chartWidth = it.width.toFloat() }
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { selectAt(it.x) },
+                                onDrag = { change, _ -> change.consume(); selectAt(change.position.x) }
+                            )
+                        }
+                ) {
                     val step = size.width / (values.size - 1)
                     repeat(5) { line -> drawLine(gridColor, androidx.compose.ui.geometry.Offset(0f, line * size.height / 4f), androidx.compose.ui.geometry.Offset(size.width, line * size.height / 4f)) }
                     repeat(7) { line -> drawLine(gridColor, androidx.compose.ui.geometry.Offset(line * size.width / 6f, 0f), androidx.compose.ui.geometry.Offset(line * size.width / 6f, size.height)) }
@@ -189,14 +210,13 @@ private fun MetricChart() {
                     val fillPath = Path().apply { addPath(linePath); lineTo(size.width, size.height); lineTo(0f, size.height); close() }
                     drawPath(fillPath, Brush.verticalGradient(listOf(DashboardGreen.copy(alpha = .26f), DashboardGreen.copy(alpha = .02f))))
                     drawPath(linePath, DashboardGreen, style = Stroke(width = 6f, cap = StrokeCap.Round))
-                    val markerIndex = 10
-                    val marker = androidx.compose.ui.geometry.Offset(markerIndex * step, size.height * (1f - values[markerIndex]))
+                    val marker = androidx.compose.ui.geometry.Offset(selectedIndex * step, size.height * (1f - values[selectedIndex]))
                     drawLine(DashboardGreen.copy(alpha = .55f), androidx.compose.ui.geometry.Offset(marker.x, marker.y), androidx.compose.ui.geometry.Offset(marker.x, size.height), strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 7f)))
                     drawCircle(Color.White, 12f, marker)
                     drawCircle(DashboardGreen, 7f, marker)
                 }
                 Surface(modifier = Modifier.align(Alignment.TopCenter).offset(x = (-18).dp), color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small, shadowElevation = 4.dp) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { Text("15.06.2024", style = MaterialTheme.typography.bodySmall, color = muted); Text("● 142 300 ₽", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = DashboardGreen) }
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { Text("${labels[selectedIndex]}.2024", style = MaterialTheme.typography.bodySmall, color = muted); Text("● ${((values[selectedIndex] * 210_000).roundToInt() / 100) * 100} ₽", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = DashboardGreen) }
                 }
             }
         }
