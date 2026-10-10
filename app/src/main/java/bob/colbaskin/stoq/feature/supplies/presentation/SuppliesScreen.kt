@@ -230,10 +230,10 @@ private fun SupplyCard(supply: Supply) {
 
 @Composable
 private fun Info(icon: ImageVector, text: String, modifier: Modifier, alignEnd: Boolean = false) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start) {
         Icon(icon, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(5.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (alignEnd) Modifier.weight(1f) else Modifier, textAlign = if (alignEnd) androidx.compose.ui.text.style.TextAlign.End else androidx.compose.ui.text.style.TextAlign.Start)
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -380,10 +380,19 @@ private fun formatRubles(value: Int): String = String.format(java.util.Locale("r
 
 @Composable
 private fun CompactTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
-    OutlinedTextField(value, onValueChange, modifier = modifier.height(52.dp), label = { Text(label, style = MaterialTheme.typography.bodySmall) }, singleLine = true, textStyle = MaterialTheme.typography.bodySmall, shape = MaterialTheme.shapes.small, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CustomTheme.colors.primaryDark, focusedLabelColor = CustomTheme.colors.primaryDark))
+    OutlinedTextField(value, onValueChange, modifier = modifier.height(52.dp), label = { RequiredLabel(label) }, singleLine = true, textStyle = MaterialTheme.typography.bodySmall, shape = MaterialTheme.shapes.small, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CustomTheme.colors.primaryDark, focusedLabelColor = CustomTheme.colors.primaryDark))
 }
 
 @Composable
 private fun DateField(value: String, onClick: () -> Unit, modifier: Modifier) {
-    Surface(modifier = modifier.height(52.dp).clip(MaterialTheme.shapes.small).clickable(onClick = onClick), shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Дата *", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value, style = MaterialTheme.typography.bodySmall) }; Icon(Icons.Outlined.CalendarToday, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) } }
+    Surface(modifier = modifier.height(52.dp).clip(MaterialTheme.shapes.small).clickable(onClick = onClick), shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { RequiredLabel("Дата *"); Text(value, style = MaterialTheme.typography.bodySmall) }; Icon(Icons.Outlined.CalendarToday, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) } }
+}
+
+@Composable
+private fun RequiredLabel(label: String) {
+    val required = label.endsWith('*')
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label.removeSuffix("*").trimEnd(), style = MaterialTheme.typography.bodySmall)
+        if (required) Text(" *", style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.error)
+    }
 }
