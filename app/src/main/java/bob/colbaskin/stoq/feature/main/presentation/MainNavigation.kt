@@ -12,6 +12,8 @@ import androidx.navigation.compose.rememberNavController
 import bob.colbaskin.stoq.common.designsystem.components.BottomBarItem
 import bob.colbaskin.stoq.common.designsystem.components.StoqBottomBar
 import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
+import bob.colbaskin.stoq.feature.supplies.presentation.CreateSupplyScreen
+import bob.colbaskin.stoq.feature.supplies.presentation.SuppliesScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -45,10 +47,14 @@ fun MainNavigation() {
                 items = mainSections,
                 selectedRoute = currentRoute,
                 onItemSelected = { section ->
-                    navController.navigate(section.route) {
-                        popUpTo(DashboardRoute) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
+                    if (section.route == SupplyRoute && navController.popBackStack(SupplyRoute, false)) {
+                        Unit
+                    } else {
+                        navController.navigate(section.route) {
+                            popUpTo(DashboardRoute) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 }
             )
@@ -66,7 +72,10 @@ fun MainNavigation() {
                 SectionPlaceholderScreen("Склад", "Здесь будут продукты, остатки и инвентаризация.", TablerIcons.Package)
             }
             composable(SupplyRoute) {
-                SectionPlaceholderScreen("Поставки", "Здесь будут поставщики и новые поставки.", TablerIcons.TruckDelivery)
+                SuppliesScreen(onCreateSupply = { navController.navigate("create_supply") })
+            }
+            composable("create_supply") {
+                CreateSupplyScreen(onBack = { navController.popBackStack() })
             }
             composable(OrdersRoute) {
                 SectionPlaceholderScreen("Заказы", "Здесь будут заказы ресторана.", TablerIcons.ShoppingCart)
