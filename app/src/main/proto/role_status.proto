@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option java_package = "bob.colbaskin.stoq.datastore";
+option java_multiple_files = true;
+
+enum RoleStatus {
+  GUEST = 0;
+  MANAGER = 1;
+  ADMINISTRATOR = 2;
+  WAITER = 3;
+}

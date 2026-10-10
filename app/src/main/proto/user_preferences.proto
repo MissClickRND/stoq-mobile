@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "auth_status.proto";
+import "role_status.proto";
+
+option java_package = "bob.colbaskin.stoq.datastore";
+option java_multiple_files = true;
+
+message UserPreferencesProto {
+  AuthStatus auth_status = 1;
+  RoleStatus role_status = 2;
+  string user_id = 3;
+  string user_name = 4;
+  string user_email = 5;
+}
