@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -104,8 +105,9 @@ fun StorageScreen() {
         }
     }
 
+    Box(Modifier.fillMaxSize().background(CustomTheme.colors.background)) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(CustomTheme.colors.background),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -129,13 +131,9 @@ fun StorageScreen() {
         }
         item { ExpiryBanner() }
         items(filteredProducts, key = { it.article }) { product -> ProductCard(product) }
-        item {
-            StoqPrimaryButton(
-                text = "＋   Добавить продукт",
-                onClick = { showAddDialog = true },
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
+        item { Spacer(Modifier.height(76.dp)) }
+    }
+    FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
     }
     if (showAddDialog) {
         AlertDialog(

@@ -13,7 +13,7 @@ class MockDishRepository : DishRepository {
         RecipeItem("Лимон", "30 г", "1,1 кг", IngredientStockStatus.Available)
     )
 
-    private val dishes = listOf(
+    private val dishes = mutableListOf(
         Dish("salmon", "Стейк из лосося", "Нежный стейк из атлантического лосося с овощами гриль и лимонным соусом.", "Горячее", 1490, 420, "https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=900&q=85", true, salmonRecipe, 12, 104300, 3),
         Dish("caesar", "Салат «Цезарь» с креветками", "Классический рецепт с тигровыми креветками и пармезаном.", "Салаты", 790, 279, "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=900&q=85", true, listOf(RecipeItem("Креветки", "140 г", "3,5 кг", IngredientStockStatus.Available), RecipeItem("Салат романо", "90 г", "2,1 кг", IngredientStockStatus.Available)), 9, 68300, 5),
         Dish("pasta", "Паста «Карбонара»", "Классическая итальянская паста с беконом, яйцом и пармезаном.", "Горячее", 690, 248, "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=900&q=85", true, listOf(RecipeItem("Паста", "250 г", "8 кг", IngredientStockStatus.Available), RecipeItem("Пармезан", "35 г", "1,6 кг", IngredientStockStatus.Available)), 18, 92700, 2),
@@ -24,4 +24,5 @@ class MockDishRepository : DishRepository {
 
     override fun getDishes(): List<Dish> = dishes
     override fun getDish(id: String): Dish? = dishes.firstOrNull { it.id == id }
+    override fun addDish(dish: Dish) { dishes.add(dish) }
 }

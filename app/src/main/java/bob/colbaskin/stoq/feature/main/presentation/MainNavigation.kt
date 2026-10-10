@@ -21,6 +21,9 @@ import bob.colbaskin.stoq.feature.dishes.presentation.DishesScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.CreateSupplyScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SuppliesScreen
 import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
+import bob.colbaskin.stoq.feature.orders.presentation.CreateOrderScreen
+import bob.colbaskin.stoq.feature.orders.presentation.OrdersScreen
+import bob.colbaskin.stoq.feature.orders.presentation.OrderDetailsScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -40,6 +43,12 @@ private data class DishDetailsDestination(val dishId: String)
 
 @Serializable
 private data class DishCollectionDestination(val recommended: Boolean)
+
+@Serializable
+private data object CreateOrderDestination
+
+@Serializable
+private data class OrderDetailsDestination(val orderId: String)
 private val mainSections = listOf(
     BottomBarItem("Дашборд", DashboardRoute, TablerIcons.ChartBar),
     BottomBarItem("Склад", ProductsRoute, TablerIcons.Package),
@@ -92,7 +101,19 @@ fun MainNavigation(user: AuthUser?) {
                 CreateSupplyScreen(onBack = { navController.popBackStack() })
             }
             composable(OrdersRoute) {
-                SectionPlaceholderScreen("Заказы", "Здесь будут заказы ресторана.", TablerIcons.ShoppingCart)
+                OrdersScreen(
+                    onCreateOrder = { navController.navigate(CreateOrderDestination) },
+                    onOrderClick = { navController.navigate(OrderDetailsDestination(it)) }
+                )
+            }
+            composable<CreateOrderDestination> {
+                CreateOrderScreen(onBack = { navController.popBackStack() })
+            }
+            composable<OrderDetailsDestination> { entry ->
+                OrderDetailsScreen(
+                    orderId = entry.toRoute<OrderDetailsDestination>().orderId,
+                    onBack = navController::popBackStack
+                )
             }
             composable(DishesRoute) {
                 DishesScreen(
