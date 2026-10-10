@@ -128,7 +128,6 @@ fun DashboardScreen() {
         item { LowStockSection() }
         item { PromotionSection() }
         item { CategoriesSection() }
-        item { RecommendationBanner() }
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showDatePicker) {
@@ -303,17 +302,6 @@ private fun CategoriesSection() {
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun RecommendationBanner() {
-    Card(modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ColorTokens.LightPrimaryContainer), shape = MaterialTheme.shapes.medium) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.TrendingUp, null, tint = DashboardGreen, modifier = Modifier.size(32.dp))
-            Spacer(Modifier.width(12.dp))
-            Text("Получите персональные рекомендации блюд на основе ваших продаж", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
