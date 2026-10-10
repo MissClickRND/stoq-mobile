@@ -1,6 +1,5 @@
 package bob.colbaskin.stoq.feature.auth.presentation
 
-import bob.colbaskin.stoq.feature.auth.domain.model.UserRole
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,14 +27,11 @@ class AuthValidationTest {
     }
 
     @Test
-    fun accessRequestRequiresEveryMandatoryField() {
+    fun accessRequestRequiresEveryVisibleMandatoryField() {
         val result = AuthValidation.accessRequest(
             fullName = "",
             email = "invalid",
-            companyName = "",
-            role = null,
-            reason = "short",
-            consentAccepted = false
+            companyName = ""
         )
 
         assertTrue(result.hasErrors())
@@ -46,10 +42,7 @@ class AuthValidationTest {
         val result = AuthValidation.accessRequest(
             fullName = "Анна Петрова",
             email = "anna@restaurant.ru",
-            companyName = "Ресторан Вкус",
-            role = UserRole.Administrator,
-            reason = "Нужен доступ для управления меню ресторана",
-            consentAccepted = true
+            companyName = "Ресторан Вкус"
         )
 
         assertFalse(result.hasErrors())

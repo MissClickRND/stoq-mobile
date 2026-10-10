@@ -1,7 +1,5 @@
 package bob.colbaskin.stoq.feature.auth.presentation
 
-import bob.colbaskin.stoq.feature.auth.domain.model.UserRole
-
 data class FieldError(
     val fullName: String? = null,
     val email: String? = null,
@@ -24,24 +22,14 @@ object AuthValidation {
         }
     )
 
-    fun accessRequest(
-        fullName: String,
-        email: String,
-        companyName: String,
-        role: UserRole?,
-        reason: String,
-        consentAccepted: Boolean
-    ): FieldError = FieldError(
+    fun accessRequest(fullName: String, email: String, companyName: String): FieldError = FieldError(
         fullName = when {
             fullName.trim().isBlank() -> "Введите имя и фамилию"
             fullName.trim().split(Regex("\\s+")).size < 2 -> "Укажите имя и фамилию"
             else -> null
         },
         email = emailError(email),
-        companyName = if (companyName.trim().isBlank()) "Укажите компанию или ресторан" else null,
-        role = if (role == null) "Выберите роль" else null,
-        reason = if (reason.trim().length < 10) "Опишите цель запроса не менее чем в 10 символах" else null,
-        consent = if (consentAccepted) null else "Необходимо согласие на обработку данных"
+        companyName = if (companyName.trim().isBlank()) "Укажите компанию или ресторан" else null
     )
 
     private fun emailError(email: String): String? = when {
@@ -55,8 +43,5 @@ fun FieldError.hasErrors(): Boolean = listOf(
     fullName,
     email,
     password,
-    companyName,
-    role,
-    reason,
-    consent
+    companyName
 ).any { it != null }
