@@ -9,9 +9,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import bob.colbaskin.stoq.common.designsystem.components.BottomBarItem
 import bob.colbaskin.stoq.common.designsystem.components.StoqBottomBar
 import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
+import bob.colbaskin.stoq.feature.dishes.presentation.DishDetailsScreen
+import bob.colbaskin.stoq.feature.dishes.presentation.DishCollectionScreen
+import bob.colbaskin.stoq.feature.dishes.presentation.DishesScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.CreateSupplyScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SuppliesScreen
 import compose.icons.TablerIcons
@@ -20,6 +24,7 @@ import compose.icons.tablericons.Package
 import compose.icons.tablericons.ShoppingCart
 import compose.icons.tablericons.TruckDelivery
 import compose.icons.tablericons.ToolsKitchen
+import kotlinx.serialization.Serializable
 
 private const val DashboardRoute = "dashboard"
 private const val ProductsRoute = "products"
@@ -27,6 +32,11 @@ private const val SupplyRoute = "supply"
 private const val OrdersRoute = "orders"
 private const val DishesRoute = "dishes"
 
+@Serializable
+private data class DishDetailsDestination(val dishId: String)
+
+@Serializable
+private data class DishCollectionDestination(val recommended: Boolean)
 private val mainSections = listOf(
     BottomBarItem("Дашборд", DashboardRoute, TablerIcons.ChartBar),
     BottomBarItem("Склад", ProductsRoute, TablerIcons.Package),
@@ -81,8 +91,24 @@ fun MainNavigation() {
                 SectionPlaceholderScreen("Заказы", "Здесь будут заказы ресторана.", TablerIcons.ShoppingCart)
             }
             composable(DishesRoute) {
-                SectionPlaceholderScreen("Блюда", "Здесь будут блюда и технологические карты.", TablerIcons.ToolsKitchen)
+                DishesScreen(
+                    onDishClick = { dishId -> navController.navigate(DishDetailsDestination(dishId)) },
+                    onStopListClick = { navController.navigate(DishCollectionDestination(recommended = false)) },
+                    onRecommendationsClick = { navController.navigate(DishCollectionDestination(recommended = true)) }
+                )
             }
-        }
+            composable<DishDetailsDestination> { entry ->
+                DishDetailsScreen(
+                    id = entry.toRoute<DishDetailsDestination>().dishId,
+                    onBack = navController::popBackStack
+                )
+            }
+            composable<DishCollectionDestination> { entry ->
+                DishCollectionScreen(
+                    recommended = entry.toRoute<DishCollectionDestination>().recommended,
+                    onBack = navController::popBackStack,
+                    onDishClick = { dishId -> navController.navigate(DishDetailsDestination(dishId)) }
+                )
+            }        }
     }
 }
