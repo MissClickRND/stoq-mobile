@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import bob.colbaskin.stoq.common.designsystem.components.BottomBarItem
 import bob.colbaskin.stoq.common.designsystem.components.StoqBottomBar
 import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
+import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -63,7 +64,7 @@ fun MainNavigation() {
                 DashboardScreen()
             }
             composable(ProductsRoute) {
-                SectionPlaceholderScreen("Склад", "Здесь будут продукты, остатки и инвентаризация.", TablerIcons.Package)
+                StorageScreen()
             }
             composable(SupplyRoute) {
                 SectionPlaceholderScreen("Поставки", "Здесь будут поставщики и новые поставки.", TablerIcons.TruckDelivery)
