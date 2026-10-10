@@ -26,7 +26,7 @@ fun StoqPrimaryButton(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 64.dp)
             .clip(MaterialTheme.shapes.medium)
             .background(
                 Brush.horizontalGradient(

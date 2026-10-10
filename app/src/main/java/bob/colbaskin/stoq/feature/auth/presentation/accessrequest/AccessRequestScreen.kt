@@ -8,6 +8,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.QuestionAnswer
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,7 +78,7 @@ fun AccessRequestScreen(
             StoqTextField(
                 value = state.companyName,
                 onValueChange = { viewModel.onAction(AccessRequestAction.CompanyNameChanged(it)) },
-                label = "Компания или ресторан",
+                label = "Компания / ресторан",
                 isError = state.fieldError.companyName != null,
                 supportingText = state.fieldError.companyName,
                 leadingIcon = Icons.Outlined.Apartment
@@ -93,6 +95,7 @@ fun AccessRequestScreen(
                     label = { Text("Роль") },
                     isError = state.fieldError.role != null,
                     supportingText = state.fieldError.role?.let { { Text(it) } },
+                    leadingIcon = { Icon(Icons.Outlined.Groups, contentDescription = null) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
                 )
@@ -116,6 +119,7 @@ fun AccessRequestScreen(
                 isError = state.fieldError.reason != null,
                 supportingText = state.fieldError.reason,
                 singleLine = false,
+                minLines = 4,
                 leadingIcon = Icons.Outlined.QuestionAnswer
             )
             androidx.compose.foundation.layout.Row(
@@ -128,7 +132,8 @@ fun AccessRequestScreen(
                 )
                 Text(
                     text = "Я согласен(на) с обработкой данных",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             state.fieldError.consent?.let {

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,12 +23,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import bob.colbaskin.stoq.R
 import coil.compose.AsyncImage
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
@@ -49,26 +47,25 @@ fun AuthScreenContainer(
             .statusBarsPadding()
             .imePadding()
     ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .offset(x = (-42).dp, y = 18.dp)
-                .width(176.dp)
-                .height(176.dp)
-                .clip(CircleShape)
-                .background(colors.primary.copy(alpha = 0.18f))
-                .blur(34.dp)
-                .alpha(0.8f)
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.auth_basil), contentDescription = null,
+            modifier = Modifier.align(Alignment.TopStart).offset(x = (-78).dp, y = 6.dp).width(174.dp).height(174.dp),
+            contentScale = ContentScale.Fit, alpha = 0.78f
         )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(x = 52.dp, y = 26.dp)
-                .width(206.dp)
-                .height(206.dp)
-                .clip(CircleShape)
-                .background(colors.primaryDark.copy(alpha = 0.15f))
-                .blur(42.dp)
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.auth_tomatoes), contentDescription = null,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 86.dp, y = 14.dp).width(220.dp).height(220.dp),
+            contentScale = ContentScale.Fit
+        )
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.auth_pepper_bowl), contentDescription = null,
+            modifier = Modifier.align(Alignment.BottomStart).offset(x = (-86).dp, y = 76.dp).width(215.dp).height(215.dp),
+            contentScale = ContentScale.Fit, alpha = 0.9f
+        )
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.auth_caprese), contentDescription = null,
+            modifier = Modifier.align(Alignment.BottomEnd).offset(x = 96.dp, y = 78.dp).width(256.dp).height(256.dp),
+            contentScale = ContentScale.Fit, alpha = 0.92f
         )
         if (onBackClick != null) {
             IconButton(
@@ -88,23 +85,24 @@ fun AuthScreenContainer(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = StoqSpacing.ScreenHorizontal),
+                .padding(horizontal = StoqSpacing.ScreenHorizontal)
+                .padding(top = 34.dp, bottom = 86.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Top
         ) {
             AsyncImage(
                 model = "file:///android_asset/stoq_logo.svg",
                 contentDescription = "STOQ",
                 modifier = Modifier
                     .fillMaxWidth(0.46f)
-                    .height(78.dp),
+                    .height(70.dp),
                 contentScale = ContentScale.Fit
             )
             Text(
                 text = title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 42.dp),
+                    .padding(top = 38.dp),
                 style = CustomTheme.typography.inter.headlineLarge,
                 color = colors.textPrimary,
                 textAlign = TextAlign.Center
@@ -119,7 +117,7 @@ fun AuthScreenContainer(
                 textAlign = TextAlign.Center
             )
             Column(
-                modifier = Modifier.padding(top = 34.dp),
+                modifier = Modifier.padding(top = 32.dp),
                 content = content
             )
         }

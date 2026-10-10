@@ -1,6 +1,8 @@
 package bob.colbaskin.stoq.feature.auth.presentation.signin
 
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -8,8 +10,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Lock
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
@@ -31,17 +37,18 @@ fun SignInScreen(
     }
 
     AuthScreenContainer(
-        title = "Войти",
+        title = "Войти в систему",
         subtitle = "Войдите с помощью рабочей почты, чтобы управлять рестораном"
     ) {
-        StoqCard(modifier = Modifier.padding(top = StoqSpacing.ExtraLarge)) {
+        StoqCard(modifier = Modifier.padding(top = StoqSpacing.Small)) {
             StoqTextField(
                 value = state.email,
                 onValueChange = { viewModel.onAction(SignInAction.EmailChanged(it)) },
                 label = "Рабочая почта",
                 placeholder = "name@restaurant.ru",
                 isError = state.fieldError.email != null,
-                supportingText = state.fieldError.email
+                supportingText = state.fieldError.email,
+                leadingIcon = Icons.Outlined.Email
             )
             Spacer(modifier = Modifier.height(StoqSpacing.Medium))
             StoqTextField(
@@ -54,7 +61,8 @@ fun SignInScreen(
                     VisualTransformation.None
                 } else {
                     PasswordVisualTransformation()
-                }
+                },
+                leadingIcon = Icons.Outlined.Lock
             )
             StoqPrimaryButton(
                 text = if (state.signInState is UiState.Loading) "Входим..." else "Войти",
@@ -71,16 +79,20 @@ fun SignInScreen(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-        Text(
-            text = "Нет доступа к системе?",
-            modifier = Modifier.padding(top = StoqSpacing.ExtraLarge),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        StoqPrimaryButton(
-            text = "Запросить доступ",
-            onClick = onRequestAccess,
-            modifier = Modifier.padding(top = StoqSpacing.Small)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = StoqSpacing.ExtraLarge),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Нет доступа к системе?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            androidx.compose.material3.TextButton(onClick = onRequestAccess) {
+                Text("Запросить доступ", style = MaterialTheme.typography.titleMedium)
+            }
+        }
     }
 }
