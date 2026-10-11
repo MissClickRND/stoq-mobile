@@ -2,6 +2,7 @@ package bob.colbaskin.stoq.common.designsystem.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +30,7 @@ fun StoqTextField(
     placeholder: String? = null,
     isError: Boolean = false,
     supportingText: String? = null,
+    isRequired: Boolean = false,
     singleLine: Boolean = true,
     minLines: Int = 1,
     visualTransformation: VisualTransformation = VisualTransformation.None,
@@ -55,7 +57,14 @@ fun StoqTextField(
                     }
                 }
             },
-        label = { Text(label) },
+        label = {
+            Row {
+                Text(label)
+                if (isRequired) {
+                    Text(" *", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
         placeholder = placeholder?.let { { Text(it) } },
         isError = isError,
         singleLine = singleLine,

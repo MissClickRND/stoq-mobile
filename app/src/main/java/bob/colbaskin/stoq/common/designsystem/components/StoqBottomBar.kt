@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -58,7 +57,7 @@ fun StoqBottomBar(
                 val selected = item.route == selectedRoute
                 Column(
                     modifier = Modifier
-                        .width(64.dp)
+                        .weight(1f)
                         .height(58.dp)
                         .semantics { this.selected = selected }
                         .background(
@@ -73,15 +72,15 @@ fun StoqBottomBar(
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.label,
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = if (selected) Color(0xFF003B3C) else Color(0xFFE3F5EF)
                     )
                     Text(
                         text = item.label,
                         modifier = Modifier.padding(top = 2.dp),
                         color = if (selected) Color(0xFF003B3C) else Color(0xFFE3F5EF),
-                        fontSize = 10.sp,
-                        lineHeight = 12.sp,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
                         maxLines = 1

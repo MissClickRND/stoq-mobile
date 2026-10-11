@@ -24,12 +24,15 @@ import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
 import bob.colbaskin.stoq.feature.orders.presentation.CreateOrderScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrdersScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrderDetailsScreen
+import bob.colbaskin.stoq.feature.admin.presentation.AdminScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
 import compose.icons.tablericons.ShoppingCart
 import compose.icons.tablericons.TruckDelivery
 import compose.icons.tablericons.ToolsKitchen
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AdminPanelSettings
 import kotlinx.serialization.Serializable
 
 private const val DashboardRoute = "dashboard"
@@ -37,6 +40,11 @@ private const val ProductsRoute = "products"
 private const val SupplyRoute = "supply"
 private const val OrdersRoute = "orders"
 private const val DishesRoute = "dishes"
+
+@Serializable
+private data object AdminDestination
+
+private val adminRoute = requireNotNull(AdminDestination::class.qualifiedName)
 
 @Serializable
 private data class DishDetailsDestination(val dishId: String)
@@ -54,7 +62,8 @@ private val mainSections = listOf(
     BottomBarItem("Склад", ProductsRoute, TablerIcons.Package),
     BottomBarItem("Поставки", SupplyRoute, TablerIcons.TruckDelivery),
     BottomBarItem("Заказы", OrdersRoute, TablerIcons.ShoppingCart),
-    BottomBarItem("Блюда", DishesRoute, TablerIcons.ToolsKitchen)
+    BottomBarItem("Блюда", DishesRoute, TablerIcons.ToolsKitchen),
+    BottomBarItem("Админ", adminRoute, Icons.Outlined.AdminPanelSettings)
 )
 
 @Composable
@@ -70,7 +79,12 @@ fun MainNavigation(user: AuthUser?) {
                 items = mainSections,
                 selectedRoute = currentRoute,
                 onItemSelected = { section ->
-                    if (section.route == SupplyRoute && navController.popBackStack(SupplyRoute, false)) {
+                    if (section.route == adminRoute) {
+                        navController.navigate(AdminDestination) {
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    } else if (section.route == SupplyRoute && navController.popBackStack(SupplyRoute, false)) {
                         Unit
                     } else {
                         navController.navigate(section.route) {
@@ -134,6 +148,10 @@ fun MainNavigation(user: AuthUser?) {
                     onBack = navController::popBackStack,
                     onDishClick = { dishId -> navController.navigate(DishDetailsDestination(dishId)) }
                 )
-            }        }
+            }
+            composable<AdminDestination> {
+                AdminScreen()
+            }
+        }
     }
 }
