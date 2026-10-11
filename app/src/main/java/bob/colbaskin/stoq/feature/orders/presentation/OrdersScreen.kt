@@ -291,7 +291,10 @@ private fun Filters(state: OrdersState, action: (OrdersAction) -> Unit) {
 }
 
 @Composable
-private fun OrderCard(order: Order, onClick: (String) -> Unit) = StoqCard(Modifier.fillMaxWidth(), PaddingValues(14.dp)) {
+private fun OrderCard(order: Order, onClick: (String) -> Unit) = StoqCard(
+    modifier = Modifier.fillMaxWidth().clickable { onClick(order.id) },
+    contentPadding = PaddingValues(14.dp)
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) { Text("#${order.id}", style = MaterialTheme.typography.titleMedium); Text("${order.date}   ${order.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         StoqStatusPill(order.status.label(), order.status.tone())
@@ -303,7 +306,6 @@ private fun OrderCard(order: Order, onClick: (String) -> Unit) = StoqCard(Modifi
         Column(Modifier.weight(1f)) { InfoLine(Icons.Outlined.LocalDining, "${order.positions} блюда"); Text(money(order.total), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp)) }
         Column(Modifier.weight(1f)) { InfoLine(if (order.type == OrderType.DineIn) Icons.Outlined.TableRestaurant else Icons.Outlined.LocalShipping, order.location); InfoLine(Icons.Outlined.PersonOutline, order.customer) }
     }
-    Surface(Modifier.fillMaxWidth().padding(top = 10.dp).clickable { onClick(order.id) }, shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) { Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) { Text("Подробнее", style = MaterialTheme.typography.labelMedium); Text("  ›", style = MaterialTheme.typography.titleMedium) } }
 }
 
 @Composable
