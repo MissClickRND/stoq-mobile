@@ -35,20 +35,20 @@ fun StoqTopBar(avatarUrl: String?) {
         contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = StoqSpacing.ScreenHorizontal),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
                 painter = painterResource(logoResource),
                 contentDescription = "STOQ",
-                modifier = Modifier.size(width = 96.dp, height = 34.dp),
+                modifier = Modifier.size(width = 96.dp, height = 36.dp),
                 contentScale = ContentScale.Fit
             )
             Box(modifier = Modifier.weight(1f))
             AsyncImage(
                 model = avatarUrl ?: DefaultAvatarUrl,
                 contentDescription = "Профиль пользователя",
-                modifier = Modifier.size(40.dp).clip(CircleShape),
+                modifier = Modifier.size(36.dp).clip(CircleShape),
                 contentScale = ContentScale.Crop
             )
         }

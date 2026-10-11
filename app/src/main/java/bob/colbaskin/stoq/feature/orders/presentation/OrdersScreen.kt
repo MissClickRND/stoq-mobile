@@ -105,7 +105,6 @@ fun OrdersScreen(
             item { MetricsGrid(state) }
             item { Filters(state, viewModel::onAction) }
             items(orders, key = { it.id }) { OrderCard(it, onOrderClick) }
-            item { Spacer(Modifier.height(76.dp)) }
         }
         FloatingActionButton(
             onClick = onCreateOrder,
@@ -162,7 +161,7 @@ fun OrderDetailsScreen(
             item { OrderDetailsInfo(order) }
             item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
             items(order.items, key = { it.dishId }) { OrderDetailItem(it) }
-            item { OrderTotal(order) }
+            item { OrderDetailsSummary(order) }
         }
         item { Spacer(Modifier.height(20.dp)) }
     }
@@ -343,12 +342,18 @@ private fun OrderDetailItem(item: OrderItem) = StoqCard(Modifier.fillMaxWidth(),
 }
 
 @Composable
-private fun OrderTotal(order: Order) = Surface(Modifier.fillMaxWidth(), color = CustomTheme.colors.primary.copy(alpha = .14f), shape = MaterialTheme.shapes.medium) {
-    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.LocalDining, null, tint = CustomTheme.colors.success)
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) { Text("Итого ${order.positions} позиций", style = MaterialTheme.typography.bodyMedium); Text("Сумма заказа", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        Text(money(order.total), style = MaterialTheme.typography.titleLarge)
+private fun OrderDetailsSummary(order: Order) = Surface(Modifier.fillMaxWidth(), color = CustomTheme.colors.primary.copy(alpha = .14f), shape = MaterialTheme.shapes.medium) {
+    Row(Modifier.padding(15.dp), horizontalArrangement = Arrangement.SpaceAround) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.LocalDining, null, tint = CustomTheme.colors.success)
+            Spacer(Modifier.width(9.dp))
+            SummaryValue("Всего позиций", order.positions.toString())
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Refresh, null, tint = CustomTheme.colors.success)
+            Spacer(Modifier.width(9.dp))
+            SummaryValue("Общая сумма заказа", money(order.total))
+        }
     }
 }
 

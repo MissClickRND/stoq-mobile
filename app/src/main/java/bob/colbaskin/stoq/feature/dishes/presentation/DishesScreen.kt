@@ -65,7 +65,6 @@ fun DishesScreen(
             }
         }
         items(state.dishes, key = Dish::id) { dish -> DishCard(dish) { onDishClick(dish.id) } }
-        item { Spacer(Modifier.height(76.dp)) }
     }
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = colors.primary, contentColor = colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить блюдо") }
     }
@@ -154,11 +153,7 @@ private fun FeatureLinkCard(
 
 @Composable private fun SearchBar(query: String, onQueryChanged: (String) -> Unit) {
     val colors = LocalColors.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        TextField(value = query, onValueChange = onQueryChanged, modifier = Modifier.weight(1f), placeholder = { Text("Поиск блюд, ингредиентов или категории...", maxLines = 1) }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = MaterialTheme.shapes.medium, singleLine = true, colors = TextFieldDefaults.colors(focusedContainerColor = colors.surface, unfocusedContainerColor = colors.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent))
-        Spacer(Modifier.width(StoqSpacing.Small))
-        Surface(Modifier.size(56.dp), shape = MaterialTheme.shapes.medium, color = colors.surface) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Tune, null, tint = colors.primaryDark) } }
-    }
+    TextField(value = query, onValueChange = onQueryChanged, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Поиск блюд, ингредиентов или категории...", maxLines = 1) }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = MaterialTheme.shapes.medium, singleLine = true, colors = TextFieldDefaults.colors(focusedContainerColor = colors.surface, unfocusedContainerColor = colors.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent))
 }
 
 @Composable private fun DishSummary(dishes: List<Dish>) {
@@ -172,13 +167,31 @@ private fun FeatureLinkCard(
     Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
         entries.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric -> Card(Modifier.weight(1f), shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(containerColor = colors.surface)) {
-                    Column(Modifier.padding(StoqSpacing.Medium)) {
-                        Box(Modifier.size(42.dp).background(metric.tint.copy(alpha = .14f), CircleShape), contentAlignment = Alignment.Center) { Icon(metric.icon, null, tint = metric.tint) }
-                        Spacer(Modifier.height(StoqSpacing.Small)); Text(metric.label, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 1)
-                        Row(verticalAlignment = Alignment.CenterVertically) { Text(metric.value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = colors.textPrimary); Spacer(Modifier.width(6.dp)); Text("↑ ${metric.change}", style = MaterialTheme.typography.labelSmall, color = metric.tint, fontWeight = FontWeight.Bold) }
-                    }
-                } }
+                row.forEach { metric -> DishMetricCard(metric.label, metric.value, metric.change, metric.icon, metric.tint, Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DishMetricCard(
+    label: String,
+    value: String,
+    change: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalColors.current
+    Card(modifier, shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(containerColor = colors.surface)) {
+        Column(Modifier.padding(StoqSpacing.Medium)) {
+            Box(Modifier.size(42.dp).background(tint.copy(alpha = .14f), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint) }
+            Spacer(Modifier.height(StoqSpacing.Small))
+            Text(label, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                Spacer(Modifier.width(6.dp))
+                Text("↑ $change", style = MaterialTheme.typography.labelSmall, color = tint, fontWeight = FontWeight.Bold)
             }
         }
     }

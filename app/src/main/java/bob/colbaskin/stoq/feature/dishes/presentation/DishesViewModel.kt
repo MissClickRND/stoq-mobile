@@ -8,6 +8,14 @@ import bob.colbaskin.stoq.feature.dishes.data.MockDishRepository
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
 
 data class DishesState(val query: String = "", val category: String = "Все", val dishes: List<Dish> = emptyList())
+data class CollectionFilterState(
+    val query: String = "",
+    val firstFilter: String,
+    val category: String = "Все категории",
+    val deliveryFilter: String = "Ожидаемое возвращение",
+    val markupFilter: String = "Наценка",
+    val ratingFilter: String = "Рейтинг"
+)
 
 class DishesViewModel : ViewModel() {
     private val repository = MockDishRepository()
@@ -15,10 +23,17 @@ class DishesViewModel : ViewModel() {
         private set
     var state by mutableStateOf(DishesState(dishes = allDishes))
         private set
+    private var stopListFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Любая причина"))
+    private var recommendationsFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Срочность"))
 
     fun updateQuery(query: String) { state = state.copy(query = query).filtered() }
     fun selectCategory(category: String) { state = state.copy(category = category).filtered() }
     fun dish(id: String) = repository.getDish(id)
+    fun collectionFilters(recommended: Boolean) = if (recommended) recommendationsFilterState else stopListFilterState
+    fun updateCollectionFilters(recommended: Boolean, update: (CollectionFilterState) -> CollectionFilterState) {
+        if (recommended) recommendationsFilterState = update(recommendationsFilterState)
+        else stopListFilterState = update(stopListFilterState)
+    }
     fun addDish(name: String, price: Int) {
         repository.addDish(Dish("custom-${System.currentTimeMillis()}", name, "Новое блюдо", "Горячее", price, (price * .35).toInt(), "", true, emptyList(), 0, 0, 0))
         allDishes = repository.getDishes()

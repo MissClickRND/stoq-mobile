@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.QueryStats
@@ -113,7 +112,7 @@ fun StorageScreen() {
     ) {
         item {
             Column {
-                Text("Продукты", style = MaterialTheme.typography.headlineMedium)
+                Text("Склад", style = MaterialTheme.typography.headlineMedium)
                 Text("Управляйте складской номенклатурой и контролируйте\nостатки продуктов", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textSecondary)
             }
         }
@@ -131,7 +130,6 @@ fun StorageScreen() {
         }
         item { ExpiryBanner() }
         items(filteredProducts, key = { it.article }) { product -> ProductCard(product) }
-        item { Spacer(Modifier.height(76.dp)) }
     }
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
     }
@@ -147,11 +145,10 @@ fun StorageScreen() {
 
 @Composable
 private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.weight(1f).heightIn(min = 58.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp),
             placeholder = { Text("Поиск продуктов, категорий или артикулов...", maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = CustomTheme.colors.textSecondary) },
             singleLine = true,
@@ -163,15 +160,6 @@ private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
                 unfocusedContainerColor = CustomTheme.colors.surface
             )
         )
-        Surface(
-            modifier = Modifier.size(58.dp),
-            shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-            color = CustomTheme.colors.surface,
-            border = BorderStroke(1.dp, CustomTheme.colors.outline)
-        ) {
-            Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.FilterList, "Фильтры", tint = CustomTheme.colors.textSecondary) }
-        }
-    }
 }
 
 @Composable
