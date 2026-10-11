@@ -13,8 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 
 enum class StoqStatusTone {
     Success,
@@ -29,11 +29,12 @@ fun StoqStatusPill(
     tone: StoqStatusTone,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalColors.current
     val (background, content) = when (tone) {
-        StoqStatusTone.Success -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.secondary
-        StoqStatusTone.Warning -> Color(0xFFFFF3DA) to Color(0xFFB87100)
-        StoqStatusTone.Error -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.error
-        StoqStatusTone.Info -> Color(0xFFE4F1FF) to Color(0xFF1674D1)
+        StoqStatusTone.Success -> colors.success.copy(alpha = 0.12f) to colors.success
+        StoqStatusTone.Warning -> colors.warning.copy(alpha = 0.12f) to colors.warning
+        StoqStatusTone.Error -> colors.error.copy(alpha = 0.12f) to colors.error
+        StoqStatusTone.Info -> colors.primary.copy(alpha = 0.16f) to colors.primaryDark
     }
 
     Row(

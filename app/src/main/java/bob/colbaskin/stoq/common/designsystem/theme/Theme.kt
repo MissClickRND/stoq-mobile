@@ -19,6 +19,10 @@ fun StoqTheme(
         darkColorScheme(
             primary = colors.primary,
             onPrimary = colors.textOnPrimary,
+            primaryContainer = colors.primary.copy(alpha = 0.18f),
+            onPrimaryContainer = colors.primaryDark,
+            secondary = colors.secondary,
+            onSecondary = colors.surface,
             background = colors.background,
             onBackground = colors.textPrimary,
             surface = colors.surface,
@@ -27,12 +31,18 @@ fun StoqTheme(
             onSurfaceVariant = colors.textSecondary,
             outline = colors.outline,
             error = colors.error,
-            onError = colors.textOnPrimary
+            onError = colors.textOnPrimary,
+            errorContainer = colors.error.copy(alpha = 0.14f),
+            onErrorContainer = colors.error
         )
     } else {
         lightColorScheme(
             primary = colors.primary,
             onPrimary = colors.textOnPrimary,
+            primaryContainer = colors.primary.copy(alpha = 0.18f),
+            onPrimaryContainer = colors.primaryDark,
+            secondary = colors.secondary,
+            onSecondary = colors.surface,
             background = colors.background,
             onBackground = colors.textPrimary,
             surface = colors.surface,
@@ -41,7 +51,9 @@ fun StoqTheme(
             onSurfaceVariant = colors.textSecondary,
             outline = colors.outline,
             error = colors.error,
-            onError = colors.surface
+            onError = colors.surface,
+            errorContainer = colors.error.copy(alpha = 0.14f),
+            onErrorContainer = colors.error
         )
     }
     CompositionLocalProvider(LocalColors provides colors, localMultiTypography provides typography) {

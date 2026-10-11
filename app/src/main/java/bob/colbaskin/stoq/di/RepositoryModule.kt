@@ -6,6 +6,8 @@ import bob.colbaskin.stoq.common.userprefs.data.UserPreferencesRepositoryImpl
 import bob.colbaskin.stoq.common.userprefs.domain.UserPreferencesRepository
 import bob.colbaskin.stoq.feature.orders.data.MockOrderRepository
 import bob.colbaskin.stoq.feature.orders.domain.OrderRepository
+import bob.colbaskin.stoq.feature.admin.data.MockAdminRepository
+import bob.colbaskin.stoq.feature.admin.domain.AdminRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -28,4 +30,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindOrderRepository(implementation: MockOrderRepository): OrderRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAdminRepository(implementation: MockAdminRepository): AdminRepository
 }
