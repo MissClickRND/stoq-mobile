@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
@@ -167,31 +168,7 @@ private fun FeatureLinkCard(
     Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
         entries.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric -> DishMetricCard(metric.label, metric.value, metric.change, metric.icon, metric.tint, Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun DishMetricCard(
-    label: String,
-    value: String,
-    change: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier
-) {
-    val colors = LocalColors.current
-    Card(modifier, shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(containerColor = colors.surface)) {
-        Column(Modifier.padding(StoqSpacing.Medium)) {
-            Box(Modifier.size(42.dp).background(tint.copy(alpha = .14f), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint) }
-            Spacer(Modifier.height(StoqSpacing.Small))
-            Text(label, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-                Spacer(Modifier.width(6.dp))
-                Text("↑ $change", style = MaterialTheme.typography.labelSmall, color = tint, fontWeight = FontWeight.Bold)
+                row.forEach { metric -> StoqMetricCard(metric.label, metric.value, metric.change, metric.icon, metric.tint, Modifier.weight(1f)) }
             }
         }
     }
