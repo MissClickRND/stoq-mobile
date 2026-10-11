@@ -20,6 +20,7 @@ import bob.colbaskin.stoq.feature.dishes.presentation.DishCollectionScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishesScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.CreateSupplyScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SuppliesScreen
+import bob.colbaskin.stoq.feature.supplies.presentation.SupplyDetailsScreen
 import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
 import bob.colbaskin.stoq.feature.orders.presentation.CreateOrderScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrdersScreen
@@ -54,6 +55,9 @@ private data class DishCollectionDestination(val recommended: Boolean)
 
 @Serializable
 private data object CreateOrderDestination
+
+@Serializable
+private data class SupplyDetailsDestination(val supplyNumber: String)
 
 @Serializable
 private data class OrderDetailsDestination(val orderId: String)
@@ -109,10 +113,19 @@ fun MainNavigation(user: AuthUser?) {
                 StorageScreen()
             }
             composable(SupplyRoute) {
-                SuppliesScreen(onCreateSupply = { navController.navigate("create_supply") })
+                SuppliesScreen(
+                    onCreateSupply = { navController.navigate("create_supply") },
+                    onSupplyClick = { supplyNumber -> navController.navigate(SupplyDetailsDestination(supplyNumber)) }
+                )
             }
             composable("create_supply") {
                 CreateSupplyScreen(onBack = { navController.popBackStack() })
+            }
+            composable<SupplyDetailsDestination> { entry ->
+                SupplyDetailsScreen(
+                    supplyNumber = entry.toRoute<SupplyDetailsDestination>().supplyNumber,
+                    onBack = navController::popBackStack
+                )
             }
             composable(OrdersRoute) {
                 OrdersScreen(

@@ -86,7 +86,7 @@ private val supplies = listOf(
 )
 
 @Composable
-fun SuppliesScreen(onCreateSupply: () -> Unit) {
+fun SuppliesScreen(onCreateSupply: () -> Unit, onSupplyClick: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf<SupplyStatus?>(null) }
     val visible = remember(query, filter) {
@@ -122,7 +122,7 @@ fun SuppliesScreen(onCreateSupply: () -> Unit) {
                 StorageFilter("Есть расхождения", "2", Icons.Outlined.WarningAmber, filter == SupplyStatus.Mismatch, { filter = SupplyStatus.Mismatch })
             }
         }
-        items(visible, key = { it.number }) { SupplyCard(it) }
+        items(visible, key = { it.number }) { supply -> SupplyCard(supply) { onSupplyClick(supply.number) } }
     }
 }
 
@@ -197,8 +197,8 @@ private fun UpdBanner() {
 }
 
 @Composable
-private fun SupplyCard(supply: Supply) {
-    StoqCard(modifier = Modifier.fillMaxWidth()) {
+private fun SupplyCard(supply: Supply, onClick: () -> Unit) {
+    StoqCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(verticalAlignment = Alignment.Top) {
             Box(Modifier.size(48.dp).clip(CircleShape).background(statusColor(supply.status).copy(alpha = .12f)), contentAlignment = Alignment.Center) { Icon(statusIcon(supply.status), null, tint = statusColor(supply.status)) }
             Spacer(Modifier.width(12.dp))
