@@ -1,5 +1,10 @@
 package bob.colbaskin.stoq.feature.orders.presentation
 
+import android.content.Intent
+import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,7 +31,10 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.LocalDining
 import androidx.compose.material.icons.outlined.LocalShipping
@@ -37,6 +45,7 @@ import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.TableRestaurant
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
@@ -48,6 +57,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -62,11 +72,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
@@ -74,12 +88,19 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
+import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.feature.orders.domain.model.Availability
 import bob.colbaskin.stoq.feature.orders.domain.model.Order
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderItem
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderStatus
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderType
 import coil.compose.AsyncImage
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun OrdersScreen(
@@ -121,6 +142,7 @@ fun OrdersScreen(
 fun CreateOrderScreen(onBack: () -> Unit, viewModel: OrdersViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     val menu = viewModel.menu().filter { state.menuQuery.isBlank() || it.name.contains(state.menuQuery, true) }
+    var guestOrderDialogVisible by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp),
@@ -128,7 +150,7 @@ fun CreateOrderScreen(onBack: () -> Unit, viewModel: OrdersViewModel = hiltViewM
     ) {
         item { ScreenHeader("Новый заказ", "Добавьте блюда в заказ и проверьте доступность ингредиентов", onBack) }
         item { NewOrderParameters(state, viewModel::onAction) }
-        item { DishPicker(state.menuQuery, menu, viewModel::onAction) }
+        item { DishPicker(state.menuQuery, menu, viewModel::onAction) { guestOrderDialogVisible = true } }
         item { OrderSummary(state) }
         item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
         items(state.basket, key = { it.dishId }) { BasketItem(it, viewModel::onAction) }
@@ -140,6 +162,9 @@ fun CreateOrderScreen(onBack: () -> Unit, viewModel: OrdersViewModel = hiltViewM
             item { CreateActions(state, viewModel::onAction, onBack) }
         } else item { EmptyBasket() }
         item { Spacer(Modifier.height(22.dp)) }
+    }
+    if (guestOrderDialogVisible) {
+        GuestOrderQrDialog(onDismiss = { guestOrderDialogVisible = false })
     }
 }
 
@@ -358,17 +383,143 @@ private fun EmptyOrderDetails() = Surface(Modifier.fillMaxWidth(), shape = Mater
 }
 
 @Composable
-private fun DishPicker(query: String, dishes: List<OrderItem>, action: (OrdersAction) -> Unit) = StoqCard(Modifier.fillMaxWidth()) {
+private fun DishPicker(query: String, dishes: List<OrderItem>, action: (OrdersAction) -> Unit, onGuestOrderQrClick: () -> Unit) = StoqCard(Modifier.fillMaxWidth()) {
     Text("Добавьте блюда в заказ", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(query, { action(OrdersAction.MenuQuery(it)) }, Modifier.weight(1f), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, trailingIcon = { if (query.isNotEmpty()) Icon(Icons.Outlined.Close, "Очистить", Modifier.clickable { action(OrdersAction.MenuQuery("")) }) }, placeholder = { Text("Поиск блюд") }, shape = MaterialTheme.shapes.medium, colors = fieldColors())
-        Surface(Modifier.height(56.dp).width(76.dp), shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.QrCodeScanner, "Сканировать меню") } }
+        Surface(Modifier.height(56.dp).width(76.dp).clickable(onClick = onGuestOrderQrClick), shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.QrCodeScanner, "Гостевой заказ по QR", tint = CustomTheme.colors.primaryDark) } }
     }
     if (query.isNotBlank()) {
         Spacer(Modifier.height(8.dp))
         dishes.take(5).forEach { dish ->
             Surface(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { action(OrdersAction.AddDish(dish)) }, color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) { Row(Modifier.padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) { DishImage(dish, 52.dp); Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(dish.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(dish.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Text(money(dish.price), style = MaterialTheme.typography.labelLarge) } }
+        }
+    }
+}
+
+@Composable
+private fun GuestOrderQrDialog(onDismiss: () -> Unit) {
+    val guestOrderLink = "https://stoq.app/order/new/guest/42"
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val qrBitmap = remember(guestOrderLink) { guestOrderQrBitmap(guestOrderLink) }
+    var copied by remember { mutableStateOf(false) }
+    val qrDownloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        context.contentResolver.openOutputStream(uri)?.use { stream ->
+            qrBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        }
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = StoqSpacing.ScreenHorizontal),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(Modifier.padding(StoqSpacing.Large)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Гостевой заказ по QR", style = MaterialTheme.typography.titleLarge)
+                        Text("Позвольте гостям создавать заказы самостоятельно", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Outlined.Close, "Закрыть", modifier = Modifier.size(24.dp).clickable(onClick = onDismiss), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Surface(
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = StoqSpacing.Large).size(210.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = CustomTheme.colors.primary.copy(alpha = 0.10f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Surface(
+                            modifier = Modifier.size(178.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Image(
+                                bitmap = qrBitmap.asImageBitmap(),
+                                contentDescription = "QR-код гостевого заказа",
+                                modifier = Modifier.padding(9.dp)
+                            )
+                        }
+                        Surface(
+                            modifier = Modifier.size(46.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = painterResource(R.drawable.stoq_leaf),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Text("Сканируйте для открытия меню", modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = StoqSpacing.Small), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Ссылка на гостевой заказ", modifier = Modifier.padding(top = StoqSpacing.Large), style = MaterialTheme.typography.labelLarge)
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.ExtraSmall),
+                    shape = MaterialTheme.shapes.small,
+                    color = CustomTheme.colors.surfaceSecondary
+                ) {
+                    Text(guestOrderLink, modifier = Modifier.padding(horizontal = StoqSpacing.Medium, vertical = 10.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Medium), horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
+                    Button(
+                        onClick = { clipboard.setText(AnnotatedString(guestOrderLink)); copied = true },
+                        modifier = Modifier.weight(1f).height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)
+                    ) {
+                        Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(18.dp))
+                        Text(if (copied) "Скопировано" else "Копировать", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
+                    }
+                    OutlinedButton(onClick = { qrDownloadLauncher.launch("guest-order-qr.png") }, modifier = Modifier.weight(1f).height(50.dp)) {
+                        Icon(Icons.Outlined.Download, null, modifier = Modifier.size(18.dp))
+                        Text("Скачать QR", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, guestOrderLink)
+                        }, "Поделиться гостевым заказом"))
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Small).height(48.dp)
+                ) {
+                    Icon(Icons.Outlined.Share, null, modifier = Modifier.size(18.dp))
+                    Text("Поделиться ссылкой", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Medium),
+                    shape = MaterialTheme.shapes.small,
+                    color = CustomTheme.colors.primary.copy(alpha = 0.10f)
+                ) {
+                    Row(Modifier.padding(StoqSpacing.Medium), verticalAlignment = Alignment.Top) {
+                        Icon(Icons.Outlined.Info, null, modifier = Modifier.size(19.dp), tint = CustomTheme.colors.primaryDark)
+                        Text("Поделитесь ссылкой или QR-кодом, чтобы гости могли самостоятельно оформить заказ.", modifier = Modifier.padding(start = StoqSpacing.Small), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun guestOrderQrBitmap(link: String): Bitmap {
+    val matrix = QRCodeWriter().encode(
+        link,
+        BarcodeFormat.QR_CODE,
+        300,
+        300,
+        mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H, EncodeHintType.MARGIN to 1)
+    )
+    return Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).also { bitmap ->
+        for (x in 0 until matrix.width) {
+            for (y in 0 until matrix.height) {
+                bitmap.setPixel(x, y, if (matrix[x, y]) android.graphics.Color.rgb(12, 32, 43) else android.graphics.Color.WHITE)
+            }
         }
     }
 }
