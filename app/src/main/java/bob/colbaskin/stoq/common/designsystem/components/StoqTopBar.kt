@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,7 +26,7 @@ private const val DefaultAvatarUrl =
     "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=144&q=80"
 
 @Composable
-fun StoqTopBar(avatarUrl: String?) {
+fun StoqTopBar(avatarUrl: String?, showAvatar: Boolean, onProfileClick: () -> Unit) {
     val logoResource = if (isSystemInDarkTheme()) R.drawable.stoq_logo_dark else R.drawable.stoq_logo_light
     Box(
         modifier = Modifier
@@ -45,12 +46,14 @@ fun StoqTopBar(avatarUrl: String?) {
                 contentScale = ContentScale.Fit
             )
             Box(modifier = Modifier.weight(1f))
-            AsyncImage(
-                model = avatarUrl ?: DefaultAvatarUrl,
-                contentDescription = "Профиль пользователя",
-                modifier = Modifier.size(36.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
+            if (showAvatar) {
+                AsyncImage(
+                    model = avatarUrl ?: DefaultAvatarUrl,
+                    contentDescription = "Профиль пользователя",
+                    modifier = Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onProfileClick),
+                    contentScale = ContentScale.Crop
+                )
+            }
         }
     }
 }
