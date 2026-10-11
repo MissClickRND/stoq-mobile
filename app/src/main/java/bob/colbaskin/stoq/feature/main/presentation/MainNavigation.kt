@@ -27,6 +27,7 @@ import bob.colbaskin.stoq.feature.orders.presentation.OrdersScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrderDetailsScreen
 import bob.colbaskin.stoq.feature.admin.presentation.AdminScreen
 import bob.colbaskin.stoq.feature.inventory.presentation.InventoryScreen
+import bob.colbaskin.stoq.feature.profile.presentation.ProfileScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -65,6 +66,10 @@ private data class OrderDetailsDestination(val orderId: String)
 
 @Serializable
 private data object InventoryDestination
+
+@Serializable
+private data object ProfileDestination
+private val profileRoute = requireNotNull(ProfileDestination::class.qualifiedName)
 private val mainSections = listOf(
     BottomBarItem("Дашборд", DashboardRoute, TablerIcons.ChartBar),
     BottomBarItem("Склад", ProductsRoute, TablerIcons.Package),
@@ -81,7 +86,13 @@ fun MainNavigation(user: AuthUser?) {
     val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
-        topBar = { StoqTopBar(avatarUrl = user?.avatarUrl) },
+        topBar = {
+            StoqTopBar(
+                avatarUrl = user?.avatarUrl,
+                showAvatar = currentRoute != profileRoute,
+                onProfileClick = { navController.navigate(ProfileDestination) { launchSingleTop = true } }
+            )
+        },
         bottomBar = {
             StoqBottomBar(
                 items = mainSections,
@@ -118,6 +129,9 @@ fun MainNavigation(user: AuthUser?) {
             }
             composable<InventoryDestination> {
                 InventoryScreen(onBack = navController::popBackStack)
+            }
+            composable<ProfileDestination> {
+                user?.let { ProfileScreen(user = it, onBack = navController::popBackStack) }
             }
             composable(SupplyRoute) {
                 SuppliesScreen(

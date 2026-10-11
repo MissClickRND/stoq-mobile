@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
@@ -40,9 +41,10 @@ data object AuthenticatedDestination
 
 @Composable
 fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
-    val navController = rememberNavController()
+    key(uiState.data.authStatus) {
+        val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = getRootStartDestination(uiState.data.authStatus)) {
+        NavHost(navController = navController, startDestination = getRootStartDestination(uiState.data.authStatus)) {
         composable<SignInDestination> {
             SignInScreen(
                 onRestaurantRegistration = { navController.navigate(RestaurantRegistrationDestination) },
@@ -87,6 +89,7 @@ fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
         }
         composable<AuthenticatedDestination> {
             MainNavigation(user = uiState.data.user)
+        }
         }
     }
 }
