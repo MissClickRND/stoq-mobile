@@ -298,13 +298,11 @@ private fun OrderCard(order: Order, onClick: (String) -> Unit) = StoqCard(
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) { Text("#${order.id}", style = MaterialTheme.typography.titleMedium); Text("${order.date}   ${order.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         StoqStatusPill(order.status.label(), order.status.tone())
-        Spacer(Modifier.width(8.dp))
-        Surface(Modifier.size(34.dp), shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.MoreHoriz, "Действия") } }
     }
     HorizontalDivider(Modifier.padding(vertical = 9.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
     Row {
         Column(Modifier.weight(1f)) { InfoLine(Icons.Outlined.LocalDining, "${order.positions} блюда"); Text(money(order.total), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp)) }
-        Column(Modifier.weight(1f)) { InfoLine(if (order.type == OrderType.DineIn) Icons.Outlined.TableRestaurant else Icons.Outlined.LocalShipping, order.location); InfoLine(Icons.Outlined.PersonOutline, order.customer) }
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { InfoLine(if (order.type == OrderType.DineIn) Icons.Outlined.TableRestaurant else Icons.Outlined.LocalShipping, order.location); InfoLine(Icons.Outlined.PersonOutline, order.customer) }
     }
 }
 
