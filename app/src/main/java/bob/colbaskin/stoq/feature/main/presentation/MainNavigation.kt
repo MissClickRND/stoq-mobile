@@ -26,6 +26,7 @@ import bob.colbaskin.stoq.feature.orders.presentation.CreateOrderScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrdersScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrderDetailsScreen
 import bob.colbaskin.stoq.feature.admin.presentation.AdminScreen
+import bob.colbaskin.stoq.feature.inventory.presentation.InventoryScreen
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -61,6 +62,9 @@ private data class SupplyDetailsDestination(val supplyNumber: String)
 
 @Serializable
 private data class OrderDetailsDestination(val orderId: String)
+
+@Serializable
+private data object InventoryDestination
 private val mainSections = listOf(
     BottomBarItem("Дашборд", DashboardRoute, TablerIcons.ChartBar),
     BottomBarItem("Склад", ProductsRoute, TablerIcons.Package),
@@ -110,7 +114,10 @@ fun MainNavigation(user: AuthUser?) {
                 DashboardScreen()
             }
             composable(ProductsRoute) {
-                StorageScreen()
+                StorageScreen(onInventoryClick = { navController.navigate(InventoryDestination) })
+            }
+            composable<InventoryDestination> {
+                InventoryScreen(onBack = navController::popBackStack)
             }
             composable(SupplyRoute) {
                 SuppliesScreen(

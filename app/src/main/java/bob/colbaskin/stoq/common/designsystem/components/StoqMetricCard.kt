@@ -33,7 +33,8 @@ fun StoqMetricCard(
     change: String,
     icon: ImageVector,
     tint: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    supportingText: String = ""
 ) {
     val colors = LocalColors.current
     Card(
@@ -62,6 +63,15 @@ fun StoqMetricCard(
                     Spacer(Modifier.width(6.dp))
                     Text("↑ $change", style = MaterialTheme.typography.labelSmall, color = tint, fontWeight = FontWeight.Bold)
                 }
+            }
+            if (supportingText.isNotBlank()) {
+                Text(
+                    supportingText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
