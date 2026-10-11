@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 
@@ -92,7 +93,7 @@ private val categories = listOf(
 )
 
 @Composable
-fun StorageScreen() {
+fun StorageScreen(onInventoryClick: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(categories.first().first) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -118,6 +119,7 @@ fun StorageScreen() {
         }
         item { ProductSearchField(query, { query = it }) }
         item { ProductMetrics() }
+        item { StoqPrimaryButton(text = "Провести инвентаризацию", onClick = onInventoryClick) }
         item {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -164,41 +166,40 @@ private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
 
 @Composable
 private fun ProductMetrics() {
+    val colors = CustomTheme.colors
+    val metrics = listOf(
+        StorageMetric("Всего продуктов", "128", "+12%", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
+        StorageMetric("С низким остатком", "12", "+3", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
+        StorageMetric("Скоро истекут", "8", "+2", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
+        StorageMetric("Поставщиков", "14", "+7%", "активных поставщиков", Icons.Outlined.Group, colors.success)
+    )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            ProductMetric("Всего продуктов", "128", "↑ +12%", "по сравнению\nс прошлым месяцем", Icons.Outlined.Inventory2, ProductStatus.Normal, Modifier.weight(1f))
-            ProductMetric("С низким\nостатком", "12", "↑ +3", "требуют\nпополнения", Icons.Outlined.WarningAmber, ProductStatus.LowStock, Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            ProductMetric("Скоро истекут", "8", "↑ +2", "в течение\n7 дней", Icons.Outlined.AccessTime, ProductStatus.Expiring, Modifier.weight(1f))
-            ProductMetric("Поставщиков", "14", "↑ +7%", "активных\nпоставщиков", Icons.Outlined.Group, ProductStatus.Normal, Modifier.weight(1f), group = true)
+        metrics.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                row.forEach { metric ->
+                    StoqMetricCard(
+                        label = metric.label,
+                        value = metric.value,
+                        change = metric.change,
+                        icon = metric.icon,
+                        tint = metric.tint,
+                        modifier = Modifier.weight(1f),
+                        supportingText = metric.supportingText
+                    )
+                }
+            }
         }
     }
 }
 
-@Composable
-private fun ProductMetric(title: String, value: String, change: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, status: ProductStatus, modifier: Modifier, group: Boolean = false) {
-    val color = when (status) {
-        ProductStatus.Normal -> CustomTheme.colors.success
-        ProductStatus.LowStock -> CustomTheme.colors.error
-        ProductStatus.Expiring -> CustomTheme.colors.warning
-    }
-    StoqCard(modifier = modifier.height(174.dp), contentPadding = PaddingValues(12.dp)) {
-        Box(Modifier.size(42.dp).clip(CircleShape).background(color.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = if (group) CustomTheme.colors.textSecondary else color, modifier = Modifier.size(24.dp))
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(title, style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary, maxLines = 2)
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(value, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.width(10.dp))
-            Text(change, style = MaterialTheme.typography.labelMedium, color = color, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary, maxLines = 2)
-    }
-}
+private data class StorageMetric(
+    val label: String,
+    val value: String,
+    val change: String,
+    val supportingText: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val tint: androidx.compose.ui.graphics.Color
+)
 
 @Composable
 private fun CategoryTab(label: String, count: String, selected: Boolean, onClick: () -> Unit) {
