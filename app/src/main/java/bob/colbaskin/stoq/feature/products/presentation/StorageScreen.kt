@@ -37,6 +37,9 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -177,6 +180,7 @@ fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hi
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun AddProductDialog(
     units: List<bob.colbaskin.stoq.feature.products.data.model.ProductUnitDto>,
     actionState: UiState<Unit>?,
@@ -205,17 +209,20 @@ private fun AddProductDialog(
                     IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Закрыть") }
                 }
                 StoqTextField(productName, { productName = it }, "Название продукта", isRequired = true)
-                Box {
+                ExposedDropdownMenuBox(
+                    expanded = unitsExpanded,
+                    onExpandedChange = { unitsExpanded = it }
+                ) {
                     OutlinedTextField(
                         value = selectedUnit?.let { "${it.name.orEmpty()} (${it.shortName.orEmpty()})" }.orEmpty(),
                         onValueChange = {},
-                        modifier = Modifier.fillMaxWidth().clickable { unitsExpanded = true },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
                         label = { Text("Единица измерения *") },
                         placeholder = { Text(if (units.isEmpty()) "Загрузка единиц…" else "Выберите единицу") },
                         readOnly = true,
-                        trailingIcon = { IconButton(onClick = { unitsExpanded = true }) { Icon(Icons.Outlined.ExpandMore, "Выбрать единицу") } }
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitsExpanded) }
                     )
-                    DropdownMenu(
+                    ExposedDropdownMenu(
                         expanded = unitsExpanded,
                         onDismissRequest = { unitsExpanded = false },
                         shape = MaterialTheme.shapes.medium,

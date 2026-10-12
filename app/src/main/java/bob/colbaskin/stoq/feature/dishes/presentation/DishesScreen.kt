@@ -188,6 +188,7 @@ private fun AddDishDialog(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun DishIngredientEditor(
     ingredient: DishIngredientDraft,
     products: List<ProductDto>,
@@ -198,17 +199,21 @@ private fun DishIngredientEditor(
     var expanded by remember { mutableStateOf(false) }
     val selectedProduct = products.firstOrNull { it.id == ingredient.productId }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
+            modifier = Modifier.weight(1f)
+        ) {
             OutlinedTextField(
                 value = selectedProduct?.name.orEmpty(),
                 onValueChange = {},
-                modifier = Modifier.fillMaxWidth().clickable { expanded = true },
-                label = { Text("Товар") },
-                placeholder = { Text(if (products.isEmpty()) "Загрузка товаров…" else "Выберите товар") },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                label = { Text("Ингредиент / продукт") },
+                placeholder = { Text(if (products.isEmpty()) "Загрузка ингредиентов…" else "Выберите ингредиент") },
                 readOnly = true,
-                trailingIcon = { IconButton(onClick = { expanded = true }) { Icon(Icons.Outlined.ExpandMore, "Выбрать товар") } }
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
             )
-            DropdownMenu(
+            ExposedDropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
                 shape = MaterialTheme.shapes.medium,
