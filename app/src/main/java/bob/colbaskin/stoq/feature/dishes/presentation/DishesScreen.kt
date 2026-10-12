@@ -1,6 +1,7 @@
 package bob.colbaskin.stoq.feature.dishes.presentation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -28,6 +30,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
@@ -155,10 +158,13 @@ private fun AddDishDialog(
                     Text("Добавление блюда", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Закрыть") }
                 }
-                StoqTextField(name, onNameChange, "Название блюда", isRequired = true)
-                StoqTextField(description, onDescriptionChange, "Описание", isRequired = true, singleLine = false, minLines = 3)
-                StoqTextField(price, onPriceChange, "Цена продажи, ₽", isRequired = true)
-                Text("Ингредиенты *", style = MaterialTheme.typography.titleMedium)
+                StoqTextField(name, onNameChange, "Название блюда")
+                StoqTextField(description, onDescriptionChange, "Описание", singleLine = false, minLines = 3)
+                StoqTextField(price, onPriceChange, "Цена продажи, ₽")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Ингредиенты", style = MaterialTheme.typography.titleMedium)
+                    Text(" *", style = MaterialTheme.typography.titleMedium, color = colors.error)
+                }
                 ingredients.forEachIndexed { index, ingredient ->
                     DishIngredientEditor(
                         ingredient = ingredient,
@@ -208,7 +214,7 @@ private fun DishIngredientEditor(
                 value = selectedProduct?.name.orEmpty(),
                 onValueChange = {},
                 modifier = Modifier.menuAnchor().fillMaxWidth(),
-                label = { Text("Ингредиент / продукт") },
+                label = { Text("Продукт") },
                 placeholder = { Text(if (products.isEmpty()) "Загрузка ингредиентов…" else "Выберите ингредиент") },
                 readOnly = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
@@ -236,7 +242,7 @@ private fun DishIngredientEditor(
             onValueChange = { onChange(ingredient.copy(quantity = it.filter { char -> char.isDigit() || char == ',' || char == '.' })) },
             label = "Количество",
             modifier = Modifier.weight(.75f),
-            isRequired = true
+            isRequired = false
         )
         if (canRemove) IconButton(onClick = onRemove) { Icon(Icons.Outlined.DeleteOutline, "Удалить ингредиент", tint = LocalColors.current.error) }
     }
@@ -249,7 +255,7 @@ private fun DishFeatureLinks(onStopListClick: () -> Unit, onRecommendationsClick
         FeatureLinkCard(
             title = "Стоп-лист блюд",
             subtitle = "Блюда, которые сейчас нельзя заказывать из-за отсутствия ингредиентов, низких остатков или других ограничений.",
-            image = "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=520&q=80",
+            imageRes = R.drawable.dish_stop_list_banner,
             accent = colors.error,
             icon = Icons.Outlined.WarningAmber,
             onClick = onStopListClick
@@ -257,7 +263,7 @@ private fun DishFeatureLinks(onStopListClick: () -> Unit, onRecommendationsClick
         FeatureLinkCard(
             title = "Рекомендуемые блюда",
             subtitle = "Блюда, которые стоит продавать в первую очередь. Учитываем остатки продуктов, себестоимость и прогноз спроса.",
-            image = "https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=520&q=80",
+            imageRes = R.drawable.dish_recommendations_banner,
             accent = colors.success,
             icon = Icons.Outlined.BarChart,
             onClick = onRecommendationsClick
@@ -269,7 +275,7 @@ private fun DishFeatureLinks(onStopListClick: () -> Unit, onRecommendationsClick
 private fun FeatureLinkCard(
     title: String,
     subtitle: String,
-    image: String,
+    imageRes: Int,
     accent: androidx.compose.ui.graphics.Color,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
@@ -299,7 +305,12 @@ private fun FeatureLinkCard(
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 Box(Modifier.weight(.96f).fillMaxHeight()) {
-                    StoqAsyncImage(image, null, Modifier.fillMaxSize().clip(imageShape), contentScale = ContentScale.Crop)
+                    Image(
+                        painter = painterResource(imageRes),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().clip(imageShape),
+                        contentScale = ContentScale.Crop
+                    )
                     Surface(
                         modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp).size(38.dp),
                         shape = CircleShape,
