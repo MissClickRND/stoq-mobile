@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
@@ -57,6 +62,7 @@ import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.feature.supplies.data.Supply
 
 private enum class ReceptionStatus(val title: String, val tone: StoqStatusTone) {
     Accepted("Принято", StoqStatusTone.Success),
@@ -76,25 +82,32 @@ private data class SupplyDetailProduct(
     val reception: ReceptionStatus
 )
 
-private val detailProducts = listOf(
-    SupplyDetailProduct("TOM-001", "Томаты свежие", "Овощи", "50", "кг", "120 ₽", "6 000 ₽", "01.07.2024", ReceptionStatus.Accepted),
-    SupplyDetailProduct("MOZ-001", "Моцарелла", "Молочные продукты", "10", "кг", "450 ₽", "4 500 ₽", "05.07.2024", ReceptionStatus.Accepted),
-    SupplyDetailProduct("SLV-001", "Сливки 33%", "Молочные продукты", "5", "л", "280 ₽", "1 400 ₽", "10.07.2024", ReceptionStatus.Accepted),
-    SupplyDetailProduct("LOS-001", "Лосось филе", "Рыба и морепродукты", "8", "кг", "980 ₽", "7 840 ₽", "28.06.2024", ReceptionStatus.NeedsReview),
-    SupplyDetailProduct("RUK-001", "Руккола", "Зелень", "4", "кг", "320 ₽", "1 280 ₽", "29.06.2024", ReceptionStatus.Accepted),
-    SupplyDetailProduct("MAS-001", "Оливковое масло", "Бакалея", "6", "л", "650 ₽", "3 900 ₽", "15.12.2024", ReceptionStatus.Accepted),
-    SupplyDetailProduct("BAZ-001", "Базилик свежий", "Зелень", "3", "кг", "400 ₽", "1 200 ₽", "30.06.2024", ReceptionStatus.Accepted),
-    SupplyDetailProduct("PAR-001", "Пармезан", "Молочные продукты", "2", "кг", "1 200 ₽", "2 400 ₽", "20.08.2024", ReceptionStatus.Waiting),
-    SupplyDetailProduct("KRE-001", "Креветки тигровые", "Рыба и морепродукты", "3", "кг", "1 150 ₽", "3 450 ₽", "12.07.2024", ReceptionStatus.Accepted)
-)
-
 @Composable
-fun SupplyDetailsScreen(supplyNumber: String, onBack: () -> Unit) {
+fun SupplyDetailsScreen(
+    supplyNumber: String,
+    onBack: () -> Unit,
+    viewModel: SupplyDetailsViewModel = hiltViewModel()
+) {
+    LaunchedEffect(supplyNumber) { viewModel.load(supplyNumber) }
     val colors = LocalColors.current
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf<ReceptionStatus?>(null) }
-    val visibleProducts = remember(query, filter) {
-        detailProducts.filter { product ->
+    val supply = (viewModel.state as? UiState.Success)?.data
+    val products = supply?.items?.map { item ->
+        SupplyDetailProduct(
+            sku = item.productId.toString(),
+            name = item.productName,
+            category = "мог",
+            quantity = item.quantity.toDisplayQuantity(),
+            unit = item.unit.ifBlank { "мог" },
+            unitPrice = "мог",
+            total = "мог",
+            expiresAt = item.expiresAt?.take(10) ?: "мог",
+            reception = if (supply.status == "RECEIVED") ReceptionStatus.Accepted else ReceptionStatus.Waiting
+        )
+    }.orEmpty()
+    val visibleProducts = remember(query, filter, products) {
+        products.filter { product ->
             (filter == null || product.reception == filter) &&
                 listOf(product.name, product.sku, product.category).any { it.contains(query, ignoreCase = true) }
         }
@@ -106,7 +119,7 @@ fun SupplyDetailsScreen(supplyNumber: String, onBack: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)
     ) {
         item { DetailHeader(supplyNumber, onBack) }
-        item { SupplyOverview(supplyNumber) }
+        item { SupplyOverview(supply) }
         item {
             Column {
                 Text("Товары в поставке", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
@@ -127,6 +140,11 @@ fun SupplyDetailsScreen(supplyNumber: String, onBack: () -> Unit) {
         } else {
             items(visibleProducts, key = { it.sku }) { product -> SupplyDetailProductCard(product) }
         }
+    }
+    when (val state = viewModel.state) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(state.title, state.text, onRetry = { viewModel.load(supplyNumber) })
+        is UiState.Success -> Unit
     }
 }
 
@@ -151,14 +169,14 @@ private fun DetailHeader(supplyNumber: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun SupplyOverview(supplyNumber: String) {
+private fun SupplyOverview(supply: Supply?) {
     val colors = LocalColors.current
     val metrics = listOf(
-        DetailMetric("ID поставки", supplyNumber, Icons.AutoMirrored.Outlined.ReceiptLong, colors.primaryDark),
-        DetailMetric("Поступила", "24.06.2024", Icons.Outlined.CalendarToday, colors.primaryDark),
-        DetailMetric("Позиций", "12", Icons.Outlined.Inventory2, colors.success),
-        DetailMetric("Сумма", "12 450 ₽", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
-        DetailMetric("Принял", "Артём Козлов", Icons.Outlined.PersonOutline, colors.secondary)
+        DetailMetric("ID поставки", supply?.number ?: "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.primaryDark),
+        DetailMetric("Поступила", supply?.receivedAt?.take(10) ?: "мог", Icons.Outlined.CalendarToday, colors.primaryDark),
+        DetailMetric("Позиций", supply?.items?.size?.toString() ?: "мог", Icons.Outlined.Inventory2, colors.success),
+        DetailMetric("Сумма", "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
+        DetailMetric("Принял", "мог", Icons.Outlined.PersonOutline, colors.secondary)
     )
     Column {
         Text("Информация о поставке", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
@@ -332,3 +350,5 @@ private data class DetailMetric(
     val icon: ImageVector,
     val tint: androidx.compose.ui.graphics.Color
 )
+
+private fun Double.toDisplayQuantity() = if (this % 1.0 == 0.0) toLong().toString() else toString()

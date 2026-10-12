@@ -57,42 +57,34 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
+import bob.colbaskin.stoq.feature.supplies.data.Supply as SupplyData
+import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyDto
+import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyItemDto
 
 private enum class SupplyStatus { Waiting, OnWay, Accepted, Mismatch }
 
-private data class Supply(
-    val number: String,
-    val supplier: String,
-    val category: String,
-    val date: String,
-    val positions: Int,
-    val amount: String,
-    val person: String,
-    val initials: String,
-    val status: SupplyStatus
-)
-
-private val supplies = listOf(
-    Supply("П-2024-0048", "ООО «АгроФуд»", "Свежие овощи и зелень", "24.06.2024 в 08:30", 12, "12 450 ₽", "Артём Козлов", "АК", SupplyStatus.Waiting),
-    Supply("П-2024-0047", "Мясной Двор", "Мясная продукция", "22.06.2024 в 14:20", 8, "28 300 ₽", "Мария Волкова", "МВ", SupplyStatus.OnWay),
-    Supply("П-2024-0046", "Молочный Мир", "Молочные продукты", "20.06.2024 в 10:15", 14, "16 780 ₽", "Иван Крылов", "ИК", SupplyStatus.Accepted),
-    Supply("П-2024-0045", "ГрандСервис", "Сухие продукты и специи", "18.06.2024 в 12:40", 20, "8 990 ₽", "Елена Кузнецова", "ЕК", SupplyStatus.Mismatch),
-    Supply("П-2024-0044", "Беверидж Плюс", "Напитки и соки", "16.06.2024 в 09:10", 10, "11 230 ₽", "Артём Козлов", "АК", SupplyStatus.Accepted)
-)
-
 @Composable
-fun SuppliesScreen(onCreateSupply: () -> Unit, onSupplyClick: (String) -> Unit) {
+fun SuppliesScreen(
+    onCreateSupply: () -> Unit,
+    onSupplyClick: (String) -> Unit,
+    viewModel: SuppliesViewModel = hiltViewModel()
+) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf<SupplyStatus?>(null) }
-    val visible = remember(query, filter) {
+    val supplies = (viewModel.state as? UiState.Success)?.data.orEmpty()
+    val visible = remember(query, filter, supplies) {
         supplies.filter { supply ->
-            (filter == null || supply.status == filter) &&
-                listOf(supply.number, supply.supplier, supply.category).any { it.contains(query, true) }
+            (filter == null || supply.toUiStatus() == filter) &&
+                listOf(supply.number, supply.items.joinToString { it.productName }).any { it.contains(query, true) }
         }
     }
     LazyColumn(
@@ -113,16 +105,21 @@ fun SuppliesScreen(onCreateSupply: () -> Unit, onSupplyClick: (String) -> Unit) 
         item {
             StoqPrimaryButton(text = "Создать поставку", onClick = onCreateSupply)
         }
-        item { StorageMetrics() }
+        item { StorageMetrics(supplies) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                StorageFilter("Все", "24", Icons.Outlined.Inventory2, filter == null, { filter = null })
-                StorageFilter("Ожидаются", "6", Icons.Outlined.WarningAmber, filter == SupplyStatus.Waiting, { filter = SupplyStatus.Waiting })
-                StorageFilter("Приняты", "16", Icons.Outlined.CheckCircle, filter == SupplyStatus.Accepted, { filter = SupplyStatus.Accepted })
-                StorageFilter("Есть расхождения", "2", Icons.Outlined.WarningAmber, filter == SupplyStatus.Mismatch, { filter = SupplyStatus.Mismatch })
+                StorageFilter("Все", supplies.size.toString(), Icons.Outlined.Inventory2, filter == null, { filter = null })
+                StorageFilter("Ожидаются", supplies.count { it.status != "RECEIVED" }.toString(), Icons.Outlined.WarningAmber, filter == SupplyStatus.Waiting, { filter = SupplyStatus.Waiting })
+                StorageFilter("Приняты", supplies.count { it.status == "RECEIVED" }.toString(), Icons.Outlined.CheckCircle, filter == SupplyStatus.Accepted, { filter = SupplyStatus.Accepted })
+                StorageFilter("Есть расхождения", "мог", Icons.Outlined.WarningAmber, filter == SupplyStatus.Mismatch, { filter = SupplyStatus.Mismatch })
             }
         }
-        items(visible, key = { it.number }) { supply -> SupplyCard(supply) { onSupplyClick(supply.number) } }
+        items(visible, key = { it.id }) { supply -> SupplyCard(supply) { onSupplyClick(supply.id.toString()) } }
+    }
+    when (val state = viewModel.state) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(state.title, state.text, viewModel::refresh)
+        is UiState.Success -> Unit
     }
 }
 
@@ -144,15 +141,15 @@ private fun SearchField(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-private fun StorageMetrics() {
+private fun StorageMetrics(supplies: List<SupplyData>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Metric("Всего поставок", "24", "+20%", Icons.Outlined.LocalShipping, Modifier.weight(1f))
-            Metric("Ожидают приёмки", "6", "+50%", Icons.Outlined.WarningAmber, Modifier.weight(1f), warning = true)
+            Metric("Всего поставок", supplies.size.toString(), "мог", Icons.Outlined.LocalShipping, Modifier.weight(1f))
+            Metric("Ожидают приёмки", supplies.count { it.status != "RECEIVED" }.toString(), "мог", Icons.Outlined.WarningAmber, Modifier.weight(1f), warning = true)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Metric("Принято поставок", "16", "+23%", Icons.Outlined.CheckCircle, Modifier.weight(1f))
-            Metric("Сумма поставок", "487 320 ₽", "+18%", Icons.Outlined.Inventory2, Modifier.weight(1f))
+            Metric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "мог", Icons.Outlined.CheckCircle, Modifier.weight(1f))
+            Metric("Сумма поставок", "мог", "мог", Icons.Outlined.Inventory2, Modifier.weight(1f))
         }
     }
 }
@@ -197,31 +194,32 @@ private fun UpdBanner() {
 }
 
 @Composable
-private fun SupplyCard(supply: Supply, onClick: () -> Unit) {
+private fun SupplyCard(supply: SupplyData, onClick: () -> Unit) {
+    val status = supply.toUiStatus()
     StoqCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(48.dp).clip(CircleShape).background(statusColor(supply.status).copy(alpha = .12f)), contentAlignment = Alignment.Center) { Icon(statusIcon(supply.status), null, tint = statusColor(supply.status)) }
+            Box(Modifier.size(48.dp).clip(CircleShape).background(statusColor(status).copy(alpha = .12f)), contentAlignment = Alignment.Center) { Icon(statusIcon(status), null, tint = statusColor(status)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(supply.number, style = MaterialTheme.typography.titleMedium)
-                        Text(supply.supplier, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text(supply.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("мог", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("мог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    StatusPill(supply.status)
+                    StatusPill(status)
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Info(Icons.Outlined.CalendarToday, supply.date, Modifier.weight(1f))
-                    Info(Icons.Outlined.Inventory2, "${supply.positions} позиций", Modifier.weight(1f), alignEnd = true)
+                    Info(Icons.Outlined.CalendarToday, supply.receivedAt?.take(10) ?: "мог", Modifier.weight(1f))
+                    Info(Icons.Outlined.Inventory2, "${supply.items.size} позиций", Modifier.weight(1f), alignEnd = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.PersonOutline, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Text(supply.person, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    Text(supply.amount, style = MaterialTheme.typography.titleMedium)
+                    Text("мог", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Text("мог", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
@@ -248,22 +246,28 @@ private fun statusColor(status: SupplyStatus) = when (status) { SupplyStatus.Wai
 
 private fun statusIcon(status: SupplyStatus) = when (status) { SupplyStatus.Waiting -> Icons.Outlined.WarningAmber; SupplyStatus.OnWay -> Icons.Outlined.LocalShipping; SupplyStatus.Accepted -> Icons.Outlined.CheckCircle; SupplyStatus.Mismatch -> Icons.Outlined.WarningAmber }
 
-private data class SupplyProduct(val name: String, val category: String, val quantity: String, val price: String, val batch: String, val expires: String)
+private fun SupplyData.toUiStatus() = if (status == "RECEIVED") SupplyStatus.Accepted else SupplyStatus.Waiting
+
+private data class SupplyProduct(
+    val productId: Long,
+    val name: String,
+    val category: String,
+    val quantity: String,
+    val price: String,
+    val batch: String,
+    val expires: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateSupplyScreen(onBack: () -> Unit) {
+fun CreateSupplyScreen(onBack: () -> Unit, viewModel: CreateSupplyViewModel = hiltViewModel()) {
     var name by remember { mutableStateOf("Поставка от 24.06.2024") }
     var date by remember { mutableStateOf("24.06.2024") }
     var supplier by remember { mutableStateOf("ООО «ФудСервис»") }
     var search by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
-    var products by remember { mutableStateOf(listOf(
-        SupplyProduct("Говядина вырезка", "Мясо и птица", "3 кг", "320 ₽", "Партия: №7731", "Годен до: 27.04.2024"),
-        SupplyProduct("Помидоры черри", "Овощи", "2 кг", "690 ₽", "Партия: №3489", "Годен до: 10.05.2024"),
-        SupplyProduct("Сыр моцарелла", "Молочные продукты", "1 кг", "1 200 ₽", "Партия: №1123", "Годен до: 29.04.2024")
-    )) }
+    var products by remember { mutableStateOf(emptyList<SupplyProduct>()) }
     LazyColumn(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -287,9 +291,14 @@ fun CreateSupplyScreen(onBack: () -> Unit) {
                 Spacer(Modifier.height(10.dp))
                 SearchField(search, { search = it })
                 if (search.isNotBlank()) {
-                    listOf("Помидоры свежие", "Помидоры черри", "Томаты в собственном соку").filter { it.contains(search, true) }.forEach { candidate ->
-                        Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { products = listOf(SupplyProduct(candidate, "Овощи", "1 кг", "250 ₽", "Партия: №${1200 + products.size}", "Годен до: 30.06.2024")) + products; search = "" }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Add, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(8.dp)); Text(candidate, Modifier.weight(1f)); Text("кг", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    viewModel.products.filter { it.name.contains(search, true) }.forEach { candidate ->
+                        Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable {
+                            if (products.none { it.productId == candidate.id }) {
+                                products = listOf(SupplyProduct(candidate.id, candidate.name, "мог", "1", "мог", "мог", date.toIsoDateTime())) + products
+                            }
+                            search = ""
+                        }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Add, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(8.dp)); Text(candidate.name, Modifier.weight(1f)); Text(candidate.unit?.shortName ?: "мог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -298,24 +307,34 @@ fun CreateSupplyScreen(onBack: () -> Unit) {
             }
         }
         item { SupplyTotal(products.size) }
-        items(products, key = { it.name + it.batch }) { product ->
+        items(products, key = { it.productId }) { product ->
             SupplyProductCard(product, { products = products.filterNot { it == product } }, { updated -> products = products.map { if (it == product) updated else it } })
         }
         item {
             StoqCard {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Surface(modifier = Modifier.weight(1f).height(52.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onBack), shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Box(contentAlignment = Alignment.Center) { Text("Сохранить", style = MaterialTheme.typography.labelLarge) } }
-                    StoqPrimaryButton("На приёмку", onBack, Modifier.weight(1.3f))
+                    StoqPrimaryButton("На приёмку", {
+                        val items = products.mapNotNull { product ->
+                            product.quantity.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }?.let { quantity ->
+                                CreateSupplyItemDto(product.productId, quantity, product.expires.toIsoDateTime())
+                            }
+                        }
+                        if (name.isNotBlank() && items.isNotEmpty()) {
+                            viewModel.create(CreateSupplyDto(name.trim(), items, date.toIsoDateTime()), onBack)
+                        }
+                    }, Modifier.weight(1.3f))
                 }
             }
         }
     }
     if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { date = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }; showDatePicker = false }) { Text("Выбрать") } }, dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } }) { DatePicker(datePickerState) }
+    if (viewModel.savingState == UiState.Loading) LoadingScreen()
 }
 
 @Composable
 private fun SupplyTotal(count: Int) {
-    Surface(color = CustomTheme.colors.primary.copy(alpha = .12f), shape = MaterialTheme.shapes.medium) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .2f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Inventory2, null, tint = CustomTheme.colors.success) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("Всего позиций", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$count", style = MaterialTheme.typography.titleLarge) }; Box(Modifier.width(1.dp).height(42.dp).background(MaterialTheme.colorScheme.outline)); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1.5f)) { Text("Общая сумма поставки", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("7 990 ₽", style = MaterialTheme.typography.titleLarge) } } }
+    Surface(color = CustomTheme.colors.primary.copy(alpha = .12f), shape = MaterialTheme.shapes.medium) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .2f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Inventory2, null, tint = CustomTheme.colors.success) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("Всего позиций", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$count", style = MaterialTheme.typography.titleLarge) }; Box(Modifier.width(1.dp).height(42.dp).background(MaterialTheme.colorScheme.outline)); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1.5f)) { Text("Общая сумма поставки", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("мог", style = MaterialTheme.typography.titleLarge) } } }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -341,7 +360,7 @@ private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUp
             }
         }
     }
-    if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { expires = "Годен до: " + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }; showDatePicker = false }) { Text("Выбрать") } }) { DatePicker(datePickerState) }
+    if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { expires = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }; showDatePicker = false }) { Text("Выбрать") } }) { DatePicker(datePickerState) }
 }
 
 @Composable
@@ -377,6 +396,11 @@ private fun ProductPriceSummary(price: String, quantity: String) {
 }
 
 private fun formatRubles(value: Int): String = String.format(java.util.Locale("ru"), "%,d", value).replace(',', ' ')
+
+private fun String.toIsoDateTime(): String {
+    val parts = trim().removePrefix("Годен до: ").split('.')
+    return if (parts.size == 3) "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00.000Z" else "2026-01-01T00:00:00.000Z"
+}
 
 @Composable
 private fun CompactTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
