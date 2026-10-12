@@ -29,7 +29,7 @@ data class OrderItem(
     val unavailableIngredient: String? = null
 )
 
-enum class Availability { Available, Unavailable }
+enum class Availability { Available, Unavailable, Unknown }
 
 data class OrderMetrics(
     val totalToday: Int,
