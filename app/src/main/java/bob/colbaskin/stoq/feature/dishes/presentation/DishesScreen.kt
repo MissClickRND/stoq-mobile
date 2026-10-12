@@ -37,6 +37,12 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
+import bob.colbaskin.stoq.feature.products.data.model.ProductDto
+
+private data class DishIngredientDraft(
+    val productId: Long? = null,
+    val quantity: String = ""
+)
 
 @Composable
 fun DishesScreen(
@@ -53,7 +59,7 @@ fun DishesScreen(
     var newName by remember { mutableStateOf("") }
     var newDescription by remember { mutableStateOf("") }
     var newPrice by remember { mutableStateOf("") }
-    var newIngredients by remember { mutableStateOf("") }
+    var ingredientDrafts by remember { mutableStateOf(listOf(DishIngredientDraft())) }
     var addToStopList by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
@@ -88,18 +94,28 @@ fun DishesScreen(
         name = newName,
         description = newDescription,
         price = newPrice,
-        ingredients = newIngredients,
+        products = viewModel.products,
+        ingredients = ingredientDrafts,
         addToStopList = addToStopList,
         onNameChange = { newName = it },
         onDescriptionChange = { newDescription = it },
         onPriceChange = { newPrice = it.filter(Char::isDigit) },
-        onIngredientsChange = { newIngredients = it },
+        onIngredientChange = { index, ingredient ->
+            ingredientDrafts = ingredientDrafts.toMutableList().also { it[index] = ingredient }
+        },
+        onAddIngredient = { ingredientDrafts = ingredientDrafts + DishIngredientDraft() },
+        onRemoveIngredient = { index ->
+            if (ingredientDrafts.size > 1) ingredientDrafts = ingredientDrafts.filterIndexed { itemIndex, _ -> itemIndex != index }
+        },
         onStopListChange = { addToStopList = it },
         onDismiss = { showAddDialog = false },
         onSubmit = {
-            if (newName.isNotBlank() && newDescription.isNotBlank() && newPrice.isNotBlank() && newIngredients.isNotBlank()) {
-                viewModel.addDish(newName, newDescription, newPrice, newIngredients)
-                newName = ""; newDescription = ""; newPrice = ""; newIngredients = ""; addToStopList = false
+            val ingredients = ingredientDrafts.mapNotNull { draft ->
+                draft.productId?.let { productId -> draft.quantity.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }?.let { productId to it } }
+            }
+            if (newName.isNotBlank() && newDescription.isNotBlank() && newPrice.isNotBlank() && ingredients.isNotEmpty()) {
+                viewModel.addDish(newName, newDescription, newPrice, ingredients)
+                newName = ""; newDescription = ""; newPrice = ""; ingredientDrafts = listOf(DishIngredientDraft()); addToStopList = false
                 showAddDialog = false
             }
         }
@@ -111,12 +127,15 @@ private fun AddDishDialog(
     name: String,
     description: String,
     price: String,
-    ingredients: String,
+    products: List<ProductDto>,
+    ingredients: List<DishIngredientDraft>,
     addToStopList: Boolean,
     onNameChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onPriceChange: (String) -> Unit,
-    onIngredientsChange: (String) -> Unit,
+    onIngredientChange: (Int, DishIngredientDraft) -> Unit,
+    onAddIngredient: () -> Unit,
+    onRemoveIngredient: (Int) -> Unit,
     onStopListChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSubmit: () -> Unit
@@ -139,8 +158,20 @@ private fun AddDishDialog(
                 StoqTextField(name, onNameChange, "Название блюда", isRequired = true)
                 StoqTextField(description, onDescriptionChange, "Описание", isRequired = true, singleLine = false, minLines = 3)
                 StoqTextField(price, onPriceChange, "Цена продажи, ₽", isRequired = true)
-                StoqTextField(ingredients, onIngredientsChange, "Ингредиенты", placeholder = "Название товара: количество", isRequired = true)
-                Text("По одному ингредиенту в строке. Название должно совпадать с товаром на складе.", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                Text("Ингредиенты *", style = MaterialTheme.typography.titleMedium)
+                ingredients.forEachIndexed { index, ingredient ->
+                    DishIngredientEditor(
+                        ingredient = ingredient,
+                        products = products,
+                        canRemove = ingredients.size > 1,
+                        onChange = { onIngredientChange(index, it) },
+                        onRemove = { onRemoveIngredient(index) }
+                    )
+                }
+                OutlinedButton(onClick = onAddIngredient, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
+                    Text("Добавить ингредиент", modifier = Modifier.padding(start = 8.dp))
+                }
                 Text("Себестоимость порции: мог", style = MaterialTheme.typography.titleMedium, color = colors.textSecondary)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = addToStopList, onCheckedChange = onStopListChange)
@@ -149,10 +180,51 @@ private fun AddDishDialog(
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
                     OutlinedButton(onClick = onDismiss) { Text("Отмена") }
-                    Button(onClick = onSubmit, enabled = name.isNotBlank() && description.isNotBlank() && price.isNotBlank() && ingredients.isNotBlank()) { Text("Добавить блюдо") }
+                    Button(onClick = onSubmit, enabled = name.isNotBlank() && description.isNotBlank() && price.isNotBlank() && ingredients.any { it.productId != null && it.quantity.replace(',', '.').toDoubleOrNull()?.let { quantity -> quantity > 0 } == true }) { Text("Добавить блюдо") }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DishIngredientEditor(
+    ingredient: DishIngredientDraft,
+    products: List<ProductDto>,
+    canRemove: Boolean,
+    onChange: (DishIngredientDraft) -> Unit,
+    onRemove: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedProduct = products.firstOrNull { it.id == ingredient.productId }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) {
+            OutlinedTextField(
+                value = selectedProduct?.name.orEmpty(),
+                onValueChange = {},
+                modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+                label = { Text("Товар") },
+                placeholder = { Text(if (products.isEmpty()) "Загрузка товаров…" else "Выберите товар") },
+                readOnly = true,
+                trailingIcon = { IconButton(onClick = { expanded = true }) { Icon(Icons.Outlined.ExpandMore, "Выбрать товар") } }
+            )
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                products.forEach { product ->
+                    DropdownMenuItem(
+                        text = { Text("${product.name} (${product.unit?.shortName ?: "мог"})") },
+                        onClick = { onChange(ingredient.copy(productId = product.id)); expanded = false }
+                    )
+                }
+            }
+        }
+        StoqTextField(
+            value = ingredient.quantity,
+            onValueChange = { onChange(ingredient.copy(quantity = it.filter { char -> char.isDigit() || char == ',' || char == '.' })) },
+            label = "Количество",
+            modifier = Modifier.weight(.75f),
+            isRequired = true
+        )
+        if (canRemove) IconButton(onClick = onRemove) { Icon(Icons.Outlined.DeleteOutline, "Удалить ингредиент", tint = LocalColors.current.error) }
     }
 }
 

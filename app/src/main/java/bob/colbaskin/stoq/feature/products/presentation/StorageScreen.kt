@@ -215,7 +215,7 @@ private fun AddProductDialog(
                         label = { Text("Единица измерения *") },
                         placeholder = { Text(if (units.isEmpty()) "Загрузка единиц…" else "Выберите единицу") },
                         readOnly = true,
-                        trailingIcon = { Icon(Icons.Outlined.ExpandMore, null) }
+                        trailingIcon = { IconButton(onClick = { unitsExpanded = true }) { Icon(Icons.Outlined.ExpandMore, "Выбрать единицу") } }
                     )
                     DropdownMenu(expanded = unitsExpanded, onDismissRequest = { unitsExpanded = false }) {
                         units.forEach { unit ->

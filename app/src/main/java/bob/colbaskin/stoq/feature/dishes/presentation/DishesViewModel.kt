@@ -77,21 +77,18 @@ class DishesViewModel @Inject constructor(
         if (recommended) recommendationsFilterState = update(recommendationsFilterState)
         else stopListFilterState = update(stopListFilterState)
     }
-    fun addDish(name: String, description: String, salePrice: String, ingredients: String) = viewModelScope.launch {
-        val parsedIngredients = ingredients.lines().mapNotNull { line ->
-            val match = ingredientPattern.matchEntire(line.trim()) ?: return@mapNotNull null
-            val productName = match.groupValues[1].trim()
-            val quantity = match.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return@mapNotNull null
-            products.firstOrNull { it.name.equals(productName, ignoreCase = true) }?.let { product ->
-                CreateDishIngredientDto(product.id, quantity)
-            }
-        }
-        if (name.isBlank() || description.isBlank() || salePrice.toDoubleOrNull() == null || parsedIngredients.isEmpty()) return@launch
+    fun addDish(
+        name: String,
+        description: String,
+        salePrice: String,
+        ingredients: List<Pair<Long, Double>>
+    ) = viewModelScope.launch {
+        if (name.isBlank() || description.isBlank() || salePrice.toDoubleOrNull() == null || ingredients.isEmpty()) return@launch
         when (repository.createDish(CreateDishDto(
             name = name.trim(),
             description = description.trim(),
             salePrice = salePrice.toDouble(),
-            recipeItems = parsedIngredients
+            recipeItems = ingredients.map { (productId, quantity) -> CreateDishIngredientDto(productId, quantity) }
         ))) {
             is UiState.Success -> refresh()
             is UiState.Error -> Unit
@@ -111,9 +108,6 @@ class DishesViewModel @Inject constructor(
             (query.isBlank() || dish.name.contains(query, ignoreCase = true) || dish.description.orEmpty().contains(query, ignoreCase = true))
     }
 
-    private companion object {
-        val ingredientPattern = Regex("^(.+?)\\s*[:;]\\s*(\\d+(?:[,.]\\d+)?)$")
-    }
 }
 
 @HiltViewModel
