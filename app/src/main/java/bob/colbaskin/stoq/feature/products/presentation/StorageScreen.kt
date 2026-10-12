@@ -58,15 +58,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
@@ -76,6 +73,8 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.feature.products.data.StorageProduct
+import compose.icons.TablerIcons
+import compose.icons.tablericons.Package
 
 private enum class ProductStatus { Normal, LowStock, Expiring }
 
@@ -89,8 +88,7 @@ private data class Product(
     val suppliers: String,
     val expiry: String,
     val expiryDate: String,
-    val status: ProductStatus,
-    val imageRes: Int
+    val status: ProductStatus
 )
 
 @Composable
@@ -363,12 +361,12 @@ private fun ExpiryBanner() {
 private fun ProductCard(product: Product, onDelete: () -> Unit) {
     StoqCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(product.imageRes),
-                contentDescription = product.name,
-                modifier = Modifier.size(64.dp).clip(androidx.compose.material3.MaterialTheme.shapes.small),
-                contentScale = ContentScale.Crop
-            )
+            Box(
+                modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small).background(CustomTheme.colors.primary.copy(alpha = .14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(TablerIcons.Package, contentDescription = product.name, modifier = Modifier.size(32.dp), tint = CustomTheme.colors.primaryDark)
+            }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Top) {
@@ -412,8 +410,7 @@ private fun StorageProduct.toProduct() = Product(
     suppliers = "мог",
     expiry = expiryDate ?: "мог",
     expiryDate = expiryDate ?: "мог",
-    status = ProductStatus.Normal,
-    imageRes = R.drawable.stoq_leaf
+    status = ProductStatus.Normal
 )
 
 @Composable
