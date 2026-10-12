@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 data class OrderDto(
     val id: Long,
     val status: String = "created",
+    val supplyId: Long? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     val items: List<OrderItemDto> = emptyList()

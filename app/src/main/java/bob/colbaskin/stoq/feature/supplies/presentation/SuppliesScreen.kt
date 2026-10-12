@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LocalShipping
-import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -41,7 +40,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -84,11 +82,9 @@ fun SuppliesScreen(
     var filter by remember { mutableStateOf<SupplyStatus?>(null) }
     val supplies = (viewModel.state as? UiState.Success)?.data.orEmpty()
     val visible = remember(query, filter, supplies) {
-        supplies.flatMap { supply ->
-            supply.items.map { item -> SupplyItemRow(supply, item) }
-        }.filter { row ->
-            (filter == null || row.supply.toUiStatus() == filter) &&
-                listOf(row.supply.number, row.item.productName, row.item.productId.toString()).any { it.contains(query, true) }
+        supplies.filter { supply ->
+            (filter == null || supply.toUiStatus() == filter) &&
+                listOf(supply.number, supply.items.joinToString { it.productName }).any { it.contains(query, true) }
         }
     }
     LazyColumn(
@@ -118,9 +114,7 @@ fun SuppliesScreen(
                 StorageFilter("Есть расхождения", "мог", Icons.Outlined.WarningAmber, filter == SupplyStatus.Mismatch, { filter = SupplyStatus.Mismatch })
             }
         }
-        items(visible, key = { "${it.supply.id}-${it.item.id}" }) { row ->
-            SupplyCard(row.supply, row.item) { onSupplyClick(row.supply.id.toString()) }
-        }
+        items(visible, key = { it.id }) { supply -> SupplyCard(supply) { onSupplyClick(supply.id.toString()) } }
     }
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()
@@ -199,64 +193,47 @@ private fun UpdBanner() {
     }
 }
 
-private data class SupplyItemRow(val supply: SupplyData, val item: bob.colbaskin.stoq.feature.supplies.data.SupplyItem)
-
 @Composable
-private fun SupplyCard(
-    supply: SupplyData,
-    item: bob.colbaskin.stoq.feature.supplies.data.SupplyItem,
-    onClick: () -> Unit
-) {
+private fun SupplyCard(supply: SupplyData, onClick: () -> Unit) {
     val status = supply.toUiStatus()
     StoqCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                modifier = Modifier.clip(MaterialTheme.shapes.small).clickable(onClick = onClick),
-                color = CustomTheme.colors.primary.copy(alpha = .12f),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("ID поставки ${supply.id}", style = MaterialTheme.typography.labelLarge, color = CustomTheme.colors.primaryDark)
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Outlined.OpenInNew, "Открыть поставку", modifier = Modifier.size(16.dp), tint = CustomTheme.colors.primaryDark)
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(48.dp).clip(CircleShape).background(statusColor(status).copy(alpha = .12f)), contentAlignment = Alignment.Center) { Icon(statusIcon(status), null, tint = statusColor(status)) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(supply.number, style = MaterialTheme.typography.titleMedium)
+                        Text("мог", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("мог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    StatusPill(status)
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Info(Icons.Outlined.CalendarToday, supply.receivedAt?.take(10) ?: "мог", Modifier.weight(1f))
+                    Info(Icons.Outlined.Inventory2, "${supply.items.size} позиций", Modifier.weight(1f), alignEnd = true)
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.PersonOutline, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(8.dp))
+                    Text("мог", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Text("мог", style = MaterialTheme.typography.titleMedium)
                 }
             }
-            Spacer(Modifier.weight(1f))
-            StatusPill(status)
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(statusColor(status).copy(alpha = .12f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.Inventory2, null, tint = statusColor(status))
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(item.productName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Арт. ${item.productId}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        HorizontalDivider(Modifier.padding(vertical = 14.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            SupplyValue("Остаток", item.quantity.toQuantityLabel(), Modifier.weight(1f))
-            SupplyValue("Ед. измерения", item.unit.ifBlank { "мог" }, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            SupplyValue("Полная цена", "мог", Modifier.weight(1f))
-            SupplyValue("Срок годности", item.expiresAt?.take(10) ?: "Срок не определён", Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun SupplyValue(label: String, value: String, modifier: Modifier) {
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(value, modifier = Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+private fun Info(icon: ImageVector, text: String, modifier: Modifier, alignEnd: Boolean = false) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start) {
+        Icon(icon, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(5.dp))
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
-
-private fun Double.toQuantityLabel() = if (this % 1.0 == 0.0) toLong().toString() else toString()
 
 @Composable
 private fun StatusPill(status: SupplyStatus) {

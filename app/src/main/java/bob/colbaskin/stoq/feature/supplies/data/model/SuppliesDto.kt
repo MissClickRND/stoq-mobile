@@ -10,7 +10,20 @@ data class SupplyDto(
     val status: String? = null,
     val receivedAt: String? = null,
     val createdAt: String? = null,
+    val product: SupplyProductDto? = null,
     val items: List<SupplyItemDto> = emptyList()
+)
+
+@Serializable
+data class SupplyProductDto(
+    val id: Long,
+    val name: String = "мог",
+    val unit: SupplyProductUnitDto? = null
+)
+
+@Serializable
+data class SupplyProductUnitDto(
+    val shortName: String? = null
 )
 
 @Serializable
@@ -20,7 +33,8 @@ data class SupplyItemDto(
     val productId: Long,
     val quantity: JsonElement,
     val expiresAt: String? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val product: SupplyProductDto? = null
 )
 
 @Serializable

@@ -77,7 +77,7 @@ private fun OrderDto.toOrder(dishes: Map<Long, DishDto>): Order {
     return Order(
         id = id.toString(), date = dateTime.take(10).ifBlank { "мог" }, time = dateTime.drop(11).ifBlank { "мог" },
         status = when (status.lowercase()) { "completed", "done" -> OrderStatus.Completed; "preparing" -> OrderStatus.Preparing; else -> OrderStatus.Processing },
-        type = OrderType.DineIn, location = "мог", customer = "мог",
+        type = OrderType.DineIn, location = "мог", customer = "мог", supplyId = supplyId?.toString(),
         items = items.map { item -> dishes[item.dishId]?.toOrderItem()?.copy(quantity = item.quantity)
             ?: OrderItem(item.dishId.toString(), "Блюдо #${item.dishId}", "мог", 0, "", item.quantity, Availability.Unknown) }
     )
