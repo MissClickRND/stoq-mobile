@@ -4,8 +4,7 @@ import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.core.toUiState
 import bob.colbaskin.stoq.common.network.safeApiCall
 import bob.colbaskin.stoq.feature.products.data.model.InventoryDto
-import bob.colbaskin.stoq.feature.products.data.model.InventoryProductBatchDto
-import bob.colbaskin.stoq.feature.products.data.model.ProductDto
+import bob.colbaskin.stoq.feature.products.data.model.UpdateQuantityItemDto
 import bob.colbaskin.stoq.feature.products.data.model.UpdateQuantityDto
 import bob.colbaskin.stoq.feature.products.data.remote.InventoryApiService
 import javax.inject.Inject
@@ -27,37 +26,40 @@ class RemoteInventoryRepository @Inject constructor(
 ) {
     suspend fun getInventory(): UiState<List<StorageProduct>> = safeApiCall(
         apiCall = {
-            val products = api.getProducts().filterNot(ProductDto::isDeleted).associateBy(ProductDto::id)
-            api.getInventory().mapNotNull { inventory -> products[inventory.batch.productId]?.let { inventory.toStorageProduct(it) } }
+            api.getInventory().mapNotNull(InventoryDto::toStorageProduct)
         },
         successHandler = { it }
     ).toUiState()
 
-    suspend fun getInventoryByProduct(productId: Long): UiState<List<InventoryProductBatchDto>> = safeApiCall(
+    suspend fun getInventoryByProduct(productId: Long): UiState<List<StorageProduct>> = safeApiCall(
         apiCall = { api.getInventoryByProduct(productId) },
-        successHandler = { it }
+        successHandler = { items -> items.mapNotNull(InventoryDto::toStorageProduct) }
     ).toUiState()
 
     suspend fun updateQuantity(batchId: Long, quantity: Double): UiState<Unit> = safeApiCall(
-        apiCall = { api.updateQuantity(UpdateQuantityDto(batchId, quantity)) },
+        apiCall = { api.updateQuantity(UpdateQuantityDto(listOf(UpdateQuantityItemDto(batchId, quantity)))) },
         successHandler = { Unit }
     ).toUiState()
 
     suspend fun updateQuantities(changes: List<Pair<Long, Double>>): UiState<Unit> = safeApiCall(
-        apiCall = { changes.forEach { (batchId, quantity) -> api.updateQuantity(UpdateQuantityDto(batchId, quantity)) } },
+        apiCall = { api.updateQuantity(UpdateQuantityDto(changes.map { (batchId, quantity) -> UpdateQuantityItemDto(batchId, quantity) })) },
         successHandler = { Unit }
     ).toUiState()
 }
 
-private fun InventoryDto.toStorageProduct(product: ProductDto): StorageProduct {
+private fun InventoryDto.toStorageProduct(): StorageProduct? {
+    val product = product ?: return null
     val unit = product.unit?.shortName.orEmpty()
+    val quantity = balance?.availableQuantity ?: 0.0
     return StorageProduct(
         id = product.id,
-        batchId = batchId,
+        batchId = id,
         name = product.name,
-        availableQuantity = availableQuantity.toDoubleOrNull() ?: 0.0,
+        availableQuantity = quantity,
         unit = unit,
-        currentStock = listOf(availableQuantity, unit).filter(String::isNotBlank).joinToString(" "),
-        expiryDate = batch.expiresAt?.take(10)
+        currentStock = listOf(quantity.toDisplayQuantity(), unit).filter(String::isNotBlank).joinToString(" "),
+        expiryDate = expiresAt?.take(10)
     )
 }
+
+private fun Double.toDisplayQuantity() = if (this % 1.0 == 0.0) toLong().toString() else toString()

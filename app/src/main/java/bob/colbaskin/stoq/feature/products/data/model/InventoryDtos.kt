@@ -3,48 +3,51 @@ package bob.colbaskin.stoq.feature.products.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ProductUnitDto(val shortName: String? = null)
+data class ProductUnitDto(
+    val id: Long? = null,
+    val name: String? = null,
+    val shortName: String? = null,
+    val createdAt: String? = null
+)
 
 @Serializable
 data class ProductDto(
     val id: Long,
     val name: String,
     val isDeleted: Boolean = false,
+    val unitId: Long? = null,
     val unit: ProductUnitDto? = null
 )
 
 @Serializable
-data class BatchDto(
-    val id: Long,
-    val productId: Long,
-    val expiresAt: String? = null
-)
+data class CreateProductDto(val name: String, val unitId: Long)
+
+@Serializable
+data class CreateUnitDto(val name: String, val shortName: String)
 
 @Serializable
 data class InventoryDto(
-    val batchId: Long,
-    val availableQuantity: String,
-    val reservedQuantity: String = "0",
-    val batch: BatchDto
-)
-
-@Serializable
-data class InventoryProductBatchDto(
     val id: Long,
+    val supplyId: Long? = null,
     val productId: Long,
+    val initialQuantity: Double = 0.0,
     val expiresAt: String? = null,
-    val balance: InventoryBalanceDto? = null
+    val status: String? = null,
+    val balance: InventoryBalanceDto? = null,
+    val product: ProductDto? = null
 )
 
 @Serializable
 data class InventoryBalanceDto(
-    val batchId: Long,
-    val availableQuantity: String,
-    val reservedQuantity: String = "0"
+    val availableQuantity: Double = 0.0,
+    val reservedQuantity: Double = 0.0
 )
 
 @Serializable
-data class UpdateQuantityDto(
+data class UpdateQuantityItemDto(
     val batchId: Long,
     val quantity: Double
 )
+
+@Serializable
+data class UpdateQuantityDto(val items: List<UpdateQuantityItemDto>)
