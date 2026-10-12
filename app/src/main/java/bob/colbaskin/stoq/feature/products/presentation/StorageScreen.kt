@@ -24,6 +24,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.QueryStats
@@ -31,6 +34,10 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +64,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
@@ -64,6 +73,7 @@ import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
+import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.feature.products.data.StorageProduct
 
@@ -95,6 +105,8 @@ fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hi
     }
     var query by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Все") }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var productToDelete by remember { mutableStateOf<Product?>(null) }
     val inventoryState = viewModel.state
     val catalogProducts = (inventoryState as? UiState.Success)?.data.orEmpty().map(StorageProduct::toProduct)
     val categories = listOf("Все" to catalogProducts.size.toString())
@@ -132,14 +144,108 @@ fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hi
             }
         }
         item { ExpiryBanner() }
-        items(filteredProducts, key = { it.article }) { product -> ProductCard(product) }
+        items(filteredProducts, key = { it.article }) { product -> ProductCard(product) { productToDelete = product } }
     }
-    FloatingActionButton(onClick = { }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
+    FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
     when (inventoryState) {
         UiState.Loading -> LoadingScreen()
         is UiState.Error -> ErrorScreen(inventoryState.title, inventoryState.text, viewModel::refresh)
         is UiState.Success -> Unit
     }
+    if (viewModel.actionState == UiState.Loading) LoadingScreen()
+    }
+    if (showAddDialog) {
+        AddProductDialog(
+            units = viewModel.units,
+            actionState = viewModel.actionState,
+            onCreateProduct = viewModel::createProduct,
+            onCreateUnit = viewModel::createUnit,
+            onDismiss = { showAddDialog = false }
+        )
+    }
+    productToDelete?.let { product ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { productToDelete = null },
+            title = { Text("Удалить продукт?") },
+            text = { Text("Продукт «${product.name}» будет удалён.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    viewModel.deleteProduct(product.id) { productToDelete = null }
+                }) { Text("Удалить") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { productToDelete = null }) { Text("Отмена") } }
+        )
+    }
+}
+
+@Composable
+private fun AddProductDialog(
+    units: List<bob.colbaskin.stoq.feature.products.data.model.ProductUnitDto>,
+    actionState: UiState<Unit>?,
+    onCreateProduct: (String, Long, () -> Unit) -> Unit,
+    onCreateUnit: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var productName by remember { mutableStateOf("") }
+    var selectedUnitId by remember { mutableStateOf<Long?>(null) }
+    var unitsExpanded by remember { mutableStateOf(false) }
+    var showUnitForm by remember { mutableStateOf(false) }
+    var unitName by remember { mutableStateOf("") }
+    var unitShortName by remember { mutableStateOf("") }
+    val selectedUnit = units.firstOrNull { it.id == selectedUnitId }
+    val colors = CustomTheme.colors
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(.91f),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = colors.surface
+        ) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Добавление продукта", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Закрыть") }
+                }
+                StoqTextField(productName, { productName = it }, "Название продукта", isRequired = true)
+                Box {
+                    OutlinedTextField(
+                        value = selectedUnit?.let { "${it.name.orEmpty()} (${it.shortName.orEmpty()})" }.orEmpty(),
+                        onValueChange = {},
+                        modifier = Modifier.fillMaxWidth().clickable { unitsExpanded = true },
+                        label = { Text("Единица измерения *") },
+                        placeholder = { Text(if (units.isEmpty()) "Загрузка единиц…" else "Выберите единицу") },
+                        readOnly = true,
+                        trailingIcon = { Icon(Icons.Outlined.ExpandMore, null) }
+                    )
+                    DropdownMenu(expanded = unitsExpanded, onDismissRequest = { unitsExpanded = false }) {
+                        units.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text("${unit.name.orEmpty()} (${unit.shortName.orEmpty()})") },
+                                onClick = { selectedUnitId = unit.id; unitsExpanded = false }
+                            )
+                        }
+                    }
+                }
+                if (showUnitForm) {
+                    StoqTextField(unitName, { unitName = it }, "Название единицы", isRequired = true)
+                    StoqTextField(unitShortName, { unitShortName = it }, "Сокращение", isRequired = true)
+                    Button(
+                        onClick = { if (unitName.isNotBlank() && unitShortName.isNotBlank()) onCreateUnit(unitName, unitShortName) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Добавить единицу") }
+                } else {
+                    androidx.compose.material3.TextButton(onClick = { showUnitForm = true }) { Text("Добавить единицу измерения") }
+                }
+                if (actionState is UiState.Error) Text(actionState.text, color = colors.error, style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
+                    androidx.compose.material3.OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+                    Button(
+                        onClick = { selectedUnitId?.let { onCreateProduct(productName, it, onDismiss) } },
+                        enabled = productName.isNotBlank() && selectedUnitId != null && actionState != UiState.Loading
+                    ) { Text("Добавить продукт") }
+                }
+            }
+        }
     }
 }
 
@@ -245,7 +351,7 @@ private fun ExpiryBanner() {
 }
 
 @Composable
-private fun ProductCard(product: Product) {
+private fun ProductCard(product: Product, onDelete: () -> Unit) {
     StoqCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             androidx.compose.foundation.Image(
@@ -263,7 +369,12 @@ private fun ProductCard(product: Product) {
                         Spacer(Modifier.height(5.dp))
                         CategoryPill(product.category)
                     }
-                    StatusPill(product.status)
+                    Column(horizontalAlignment = Alignment.End) {
+                        StatusPill(product.status)
+                        IconButton(onClick = onDelete, modifier = Modifier.size(38.dp)) {
+                            Icon(Icons.Outlined.DeleteOutline, "Удалить продукт", tint = CustomTheme.colors.error)
+                        }
+                    }
                 }
             }
         }
