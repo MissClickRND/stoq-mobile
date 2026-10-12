@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -106,6 +107,7 @@ import androidx.compose.ui.window.DialogProperties
 fun OrdersScreen(
     onCreateOrder: () -> Unit,
     onOrderClick: (String) -> Unit,
+    onSupplyClick: (String) -> Unit,
     viewModel: OrdersViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -125,7 +127,7 @@ fun OrdersScreen(
             item { OrderSearch(state.query) { viewModel.onAction(OrdersAction.Query(it)) } }
             item { MetricsGrid(state) }
             item { Filters(state, viewModel::onAction) }
-            items(orders, key = { it.id }) { OrderCard(it, onOrderClick) }
+            items(orders, key = { it.id }) { OrderCard(it, onOrderClick, onSupplyClick) }
         }
         FloatingActionButton(
             onClick = onCreateOrder,
@@ -316,19 +318,60 @@ private fun Filters(state: OrdersState, action: (OrdersAction) -> Unit) {
 }
 
 @Composable
-private fun OrderCard(order: Order, onClick: (String) -> Unit) = StoqCard(
+private fun OrderCard(order: Order, onClick: (String) -> Unit, onSupplyClick: (String) -> Unit) = StoqCard(
     modifier = Modifier.fillMaxWidth().clickable { onClick(order.id) },
-    contentPadding = PaddingValues(14.dp)
+    contentPadding = PaddingValues(10.dp)
 ) {
+    val item = order.items.firstOrNull()
+    val isAvailable = item?.availability == Availability.Available
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) { Text("#${order.id}", style = MaterialTheme.typography.titleMedium); Text("${order.date}   ${order.time}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        StoqStatusPill(order.status.label(), order.status.tone())
+        Box(
+            Modifier.size(38.dp).clip(CircleShape).background((if (isAvailable) CustomTheme.colors.success else CustomTheme.colors.warning).copy(alpha = .14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Outlined.LocalDining, null, modifier = Modifier.size(21.dp), tint = if (isAvailable) CustomTheme.colors.success else CustomTheme.colors.warning)
+        }
+        Spacer(Modifier.width(9.dp))
+        Column(Modifier.weight(1f)) {
+            Text(item?.name ?: "мог", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Арт. ${item?.dishId ?: "мог"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            StoqStatusPill(if (isAvailable) "В норме" else "мог", if (isAvailable) StoqStatusTone.Success else StoqStatusTone.Warning)
+            Surface(
+                modifier = Modifier.padding(top = 7.dp).size(30.dp),
+                shape = MaterialTheme.shapes.small,
+                color = CustomTheme.colors.error.copy(alpha = .88f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.surface)
+                }
+            }
+        }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable(enabled = order.supplyId != null) { order.supplyId?.let(onSupplyClick) }
+    ) {
+        Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
+            Text("ID поставки: ${order.supplyId ?: "мог"}", modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.weight(1f))
+        Icon(Icons.Outlined.ChevronRight, "Открыть поставку", modifier = Modifier.size(20.dp), tint = if (order.supplyId == null) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f) else CustomTheme.colors.primaryDark)
     }
     HorizontalDivider(Modifier.padding(vertical = 9.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
-    Row {
-        Column(Modifier.weight(1f)) { InfoLine(Icons.Outlined.LocalDining, "${order.positions} блюда"); Text(money(order.total), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp)) }
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { InfoLine(if (order.type == OrderType.DineIn) Icons.Outlined.TableRestaurant else Icons.Outlined.LocalShipping, order.location); InfoLine(Icons.Outlined.PersonOutline, order.customer) }
+    Row(modifier = Modifier.fillMaxWidth()) {
+        OrderCardValue("Остаток", "мог", Modifier.weight(1f))
+        OrderCardValue("Ед. измерения", "мог", Modifier.weight(1f))
+        OrderCardValue("Полная цена", money(order.total), Modifier.weight(1f))
+        OrderCardValue("Срок годности", "Срок не определён", Modifier.weight(1.4f))
     }
+}
+
+@Composable
+private fun OrderCardValue(label: String, value: String, modifier: Modifier) = Column(modifier) {
+    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(value, modifier = Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
 @Composable

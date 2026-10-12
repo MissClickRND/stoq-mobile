@@ -148,7 +148,8 @@ fun MainNavigation(user: AuthUser?) {
             composable(OrdersRoute) {
                 OrdersScreen(
                     onCreateOrder = { navController.navigate(CreateOrderDestination) },
-                    onOrderClick = { navController.navigate(OrderDetailsDestination(it)) }
+                    onOrderClick = { navController.navigate(OrderDetailsDestination(it)) },
+                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) }
                 )
             }
             composable<CreateOrderDestination> {

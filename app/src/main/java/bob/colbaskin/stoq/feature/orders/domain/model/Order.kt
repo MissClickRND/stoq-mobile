@@ -11,7 +11,8 @@ data class Order(
     val type: OrderType,
     val location: String,
     val customer: String,
-    val items: List<OrderItem>
+    val items: List<OrderItem>,
+    val supplyId: String? = null
 ) {
     val total: Int get() = items.sumOf { it.price * it.quantity }
     val positions: Int get() = items.sumOf { it.quantity }

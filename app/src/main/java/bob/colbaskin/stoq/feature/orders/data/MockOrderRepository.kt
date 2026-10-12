@@ -47,11 +47,11 @@ class MockOrderRepository @Inject constructor() : OrderRepository {
         item("burger", "Бургер с говядиной", "Горячее", 890, "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=360&q=80")
     )
     private var orders = listOf(
-        order("10248", "01.06.2024", "14:32", OrderStatus.Processing, OrderType.DineIn, "Стол 8", "Анна Петрова", listOf(dishes[0].copy(quantity = 1), dishes[1].copy(quantity = 1), dishes[2].copy(quantity = 2))),
-        order("10247", "01.06.2024", "14:18", OrderStatus.Preparing, OrderType.DineIn, "Стол 5", "Иван Соколов", listOf(dishes[1].copy(quantity = 1), dishes[4].copy(quantity = 2))),
-        order("10246", "01.06.2024", "14:05", OrderStatus.Completed, OrderType.DineIn, "Стол 12", "Мария Кузнецова", listOf(dishes[0].copy(quantity = 1), dishes[4].copy(quantity = 2), dishes[7].copy(quantity = 2))),
-        order("10245", "01.06.2024", "13:48", OrderStatus.Preparing, OrderType.DineIn, "Стол 3", "Анна Петрова", listOf(dishes[3].copy(quantity = 1), dishes[2].copy(quantity = 1))),
-        order("10244", "01.06.2024", "13:35", OrderStatus.Completed, OrderType.Delivery, "Доставка", "Курьер №3", listOf(dishes[8].copy(quantity = 1), dishes[1].copy(quantity = 1), dishes[7].copy(quantity = 1)))
+        order("10248", "01.06.2024", "14:32", OrderStatus.Processing, OrderType.DineIn, "Стол 8", "Анна Петрова", listOf(dishes[0].copy(quantity = 1), dishes[1].copy(quantity = 1), dishes[2].copy(quantity = 2)), "1"),
+        order("10247", "01.06.2024", "14:18", OrderStatus.Preparing, OrderType.DineIn, "Стол 5", "Иван Соколов", listOf(dishes[1].copy(quantity = 1), dishes[4].copy(quantity = 2)), "2"),
+        order("10246", "01.06.2024", "14:05", OrderStatus.Completed, OrderType.DineIn, "Стол 12", "Мария Кузнецова", listOf(dishes[0].copy(quantity = 1), dishes[4].copy(quantity = 2), dishes[7].copy(quantity = 2)), "3"),
+        order("10245", "01.06.2024", "13:48", OrderStatus.Preparing, OrderType.DineIn, "Стол 3", "Анна Петрова", listOf(dishes[3].copy(quantity = 1), dishes[2].copy(quantity = 1)), "1"),
+        order("10244", "01.06.2024", "13:35", OrderStatus.Completed, OrderType.Delivery, "Доставка", "Курьер №3", listOf(dishes[8].copy(quantity = 1), dishes[1].copy(quantity = 1), dishes[7].copy(quantity = 1)), "2")
     )
 
     override fun orders() = orders
@@ -76,7 +76,7 @@ class MockOrderRepository @Inject constructor() : OrderRepository {
     }
 
     private fun item(id: String, name: String, category: String, price: Int, image: String) = OrderItem(id, name, category, price, image, 1, Availability.Available)
-    private fun order(id: String, date: String, time: String, status: OrderStatus, type: OrderType, location: String, customer: String, items: List<OrderItem>) = Order(id, date, time, status, type, location, customer, items)
+    private fun order(id: String, date: String, time: String, status: OrderStatus, type: OrderType, location: String, customer: String, items: List<OrderItem>, supplyId: String? = null) = Order(id, date, time, status, type, location, customer, items, supplyId)
     private fun missingIngredient(item: OrderItem): String? = recipes[item.dishId]?.firstOrNull { requirement ->
         batches[requirement.ingredient].orEmpty().sumOf { it.remaining } < requirement.amount * item.quantity
     }?.ingredient
