@@ -2,8 +2,8 @@ package bob.colbaskin.stoq.feature.orders.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.feature.orders.domain.OrderRepository
+import bob.colbaskin.stoq.feature.orders.domain.model.Availability
 import bob.colbaskin.stoq.feature.orders.domain.model.Order
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderItem
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderMetrics
@@ -17,15 +17,13 @@ import javax.inject.Inject
 
 data class OrdersState(
     val orders: List<Order> = emptyList(),
-    val menu: List<OrderItem> = emptyList(),
     val metrics: OrderMetrics = OrderMetrics(0, 0, 0, 0),
-    val loadState: UiState<Unit> = UiState.Loading,
     val query: String = "",
     val status: OrderStatus? = null,
     val type: String = "Все типы заказа",
     val date: String = currentDateTime(),
     val basket: List<OrderItem> = emptyList(),
-    val menuQuery: String = "",
+    val menuQuery: String = "салат",
     val orderDate: String = currentDateTime(),
     val orderType: String = "В зале",
     val table: String = "Стол 12",
@@ -33,22 +31,27 @@ data class OrdersState(
     val checked: Boolean = false,
     val saved: Boolean = false,
     val created: Boolean = false,
-    val error: String? = null,
-    val isCreating: Boolean = false
+    val error: String? = null
 )
 
 @HiltViewModel
-class OrdersViewModel @Inject constructor(
-    private val repository: OrderRepository
-) : ViewModel() {
+class OrdersViewModel @Inject constructor(private val repository: OrderRepository) : ViewModel() {
     private val _state = MutableStateFlow(OrdersState())
     val state = _state.asStateFlow()
-
-    init { refresh() }
-
+    init {
+        val menu = repository.menu()
+        val initialBasket = repository.check(listOf(
+            menu.first { it.dishId == "salmon" },
+            menu.first { it.dishId == "caesar" }.copy(quantity = 2),
+            menu.first { it.dishId == "pasta" },
+            menu.first { it.dishId == "cheesecake" }.copy(quantity = 2),
+            menu.first { it.dishId == "burger" }
+        ))
+        _state.update { it.copy(basket = initialBasket, checked = true) }
+        refresh()
+    }
     fun reload() = refresh()
-
-    fun onAction(action: OrdersAction) {
+    fun onAction(action: OrdersAction) = viewModelScope.launch {
         when (action) {
             is OrdersAction.Query -> _state.update { it.copy(query = action.value) }
             is OrdersAction.Status -> _state.update { it.copy(status = action.value) }
@@ -57,9 +60,7 @@ class OrdersViewModel @Inject constructor(
             OrdersAction.ResetFilters -> _state.update { it.copy(query = "", status = null, type = "Все типы заказа", date = currentDateTime()) }
             is OrdersAction.MenuQuery -> _state.update { it.copy(menuQuery = action.value) }
             is OrdersAction.OrderDate -> _state.update { it.copy(orderDate = action.value) }
-            is OrdersAction.OrderType -> _state.update {
-                it.copy(orderType = action.value, table = if (action.value == "Доставка") "" else it.table, guests = if (action.value == "Доставка") "" else it.guests)
-            }
+            is OrdersAction.OrderType -> _state.update { it.copy(orderType = action.value, table = if (action.value == "Доставка") "" else it.table, guests = if (action.value == "Доставка") "" else it.guests) }
             is OrdersAction.Table -> _state.update { it.copy(table = action.value) }
             is OrdersAction.Guests -> _state.update { it.copy(guests = action.value) }
             is OrdersAction.AddDish -> addDish(action.item)
@@ -70,51 +71,23 @@ class OrdersViewModel @Inject constructor(
             OrdersAction.ResetCreation -> _state.update { it.copy(created = false, basket = emptyList(), checked = false, saved = false, error = null) }
         }
     }
-
-    private fun refresh() = viewModelScope.launch {
-        _state.update { it.copy(loadState = UiState.Loading) }
-        val orders = repository.orders()
-        val menu = repository.menu()
-        when {
-            orders is UiState.Success && menu is UiState.Success -> _state.update {
-                it.copy(orders = orders.data, menu = menu.data, metrics = repository.metrics(orders.data), loadState = UiState.Success(Unit))
-            }
-            orders is UiState.Error -> _state.update { it.copy(loadState = orders) }
-            menu is UiState.Error -> _state.update { it.copy(loadState = menu) }
-            else -> _state.update { it.copy(loadState = UiState.Error("Не удалось загрузить заказы", "Повторите попытку")) }
-        }
-    }
-
+    private fun refresh() { _state.update { it.copy(orders = repository.orders(), metrics = repository.metrics()) } }
     private fun addDish(item: OrderItem) = _state.update { state ->
         val matching = state.basket.find { it.dishId == item.dishId }
-        state.copy(
-            basket = if (matching == null) state.basket + item else state.basket.map { if (it.dishId == item.dishId) it.copy(quantity = it.quantity + 1) else it },
-            menuQuery = "", checked = true, error = null
-        )
+        state.copy(basket = repository.check(if (matching == null) state.basket + item else state.basket.map { if (it.dishId == item.dishId) it.copy(quantity = it.quantity + 1) else it }), menuQuery = "", checked = true, error = null)
     }
-
     private fun changeQuantity(id: String, delta: Int) = _state.update { state ->
-        state.copy(
-            basket = state.basket.mapNotNull { if (it.dishId != id) it else it.copy(quantity = it.quantity + delta).takeIf { changed -> changed.quantity > 0 } },
-            checked = true, error = null
-        )
+        state.copy(basket = repository.check(state.basket.mapNotNull { if (it.dishId != id) it else it.copy(quantity = it.quantity + delta).takeIf { changed -> changed.quantity > 0 } }), checked = true, error = null)
     }
-
-    private fun create() = viewModelScope.launch {
-        val basket = _state.value.basket
-        if (basket.isEmpty()) return@launch
-        _state.update { it.copy(isCreating = true, error = null) }
-        when (val result = repository.create(basket)) {
-            is UiState.Success -> _state.update {
-                val updatedOrders = listOf(result.data) + it.orders.filterNot { order -> order.id == result.data.id }
-                it.copy(orders = updatedOrders, metrics = repository.metrics(updatedOrders), created = true, checked = true, basket = emptyList(), isCreating = false)
-            }
-            is UiState.Error -> _state.update { it.copy(isCreating = false, error = result.text) }
-            UiState.Loading -> Unit
-        }
+    private fun create() {
+        val checked = repository.check(_state.value.basket)
+        if (checked.any { it.availability == Availability.Unavailable }) { _state.update { it.copy(basket = checked, checked = true, error = "Нельзя создать заказ: есть недоступные блюда") }; return }
+        val location = if (_state.value.orderType == "В зале") _state.value.table else "Доставка"
+        repository.create(checked, _state.value.orderType, location, _state.value.guests, _state.value.orderDate).onSuccess { refresh(); _state.update { state -> state.copy(created = true, checked = true, basket = emptyList()) } }.onFailure { throwable -> _state.update { state -> state.copy(error = throwable.message) } }
     }
-
-    private fun updateBasket(items: List<OrderItem>) = _state.update { it.copy(basket = items, checked = true, error = null) }
+    private fun updateBasket(items: List<OrderItem>) = _state.update { it.copy(basket = repository.check(items), checked = true, error = null) }
+    fun menu() = repository.menu()
+    fun order(id: String) = repository.order(id)
 }
 
 sealed interface OrdersAction {
