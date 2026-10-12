@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -23,20 +24,26 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.hilt.navigation.compose.hiltViewModel
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
+import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
-import coil.compose.AsyncImage
 
 @Composable
 fun DishesScreen(
     onDishClick: (String) -> Unit,
     onStopListClick: () -> Unit,
     onRecommendationsClick: () -> Unit,
-    viewModel: DishesViewModel = viewModel()
+    viewModel: DishesViewModel = hiltViewModel()
 ) {
     val state = viewModel.state
     val colors = LocalColors.current
@@ -44,7 +51,10 @@ fun DishesScreen(
     val tabs = listOf("Все", "Горячее", "Салаты", "Десерты", "В стоп-листе")
     var showAddDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var newDescription by remember { mutableStateOf("") }
     var newPrice by remember { mutableStateOf("") }
+    var newIngredients by remember { mutableStateOf("") }
+    var addToStopList by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -68,14 +78,81 @@ fun DishesScreen(
         items(state.dishes, key = Dish::id) { dish -> DishCard(dish) { onDishClick(dish.id) } }
     }
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = colors.primary, contentColor = colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить блюдо") }
+    when (val loadState = state.loadState) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::refresh)
+        is UiState.Success -> Unit
     }
-    if (showAddDialog) AlertDialog(
-        onDismissRequest = { showAddDialog = false },
-        title = { Text("Новое блюдо") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(newName, { newName = it }, label = { Text("Название") }, singleLine = true); OutlinedTextField(newPrice, { newPrice = it.filter(Char::isDigit) }, label = { Text("Цена") }, singleLine = true) } },
-        confirmButton = { TextButton(onClick = { val price = newPrice.toIntOrNull(); if (newName.isNotBlank() && price != null) { viewModel.addDish(newName, price); newName = ""; newPrice = ""; showAddDialog = false } }) { Text("Добавить") } },
-        dismissButton = { TextButton(onClick = { showAddDialog = false }) { Text("Отмена") } }
+    }
+    if (showAddDialog) AddDishDialog(
+        name = newName,
+        description = newDescription,
+        price = newPrice,
+        ingredients = newIngredients,
+        addToStopList = addToStopList,
+        onNameChange = { newName = it },
+        onDescriptionChange = { newDescription = it },
+        onPriceChange = { newPrice = it.filter(Char::isDigit) },
+        onIngredientsChange = { newIngredients = it },
+        onStopListChange = { addToStopList = it },
+        onDismiss = { showAddDialog = false },
+        onSubmit = {
+            if (newName.isNotBlank() && newDescription.isNotBlank() && newPrice.isNotBlank() && newIngredients.isNotBlank()) {
+                viewModel.addDish(newName)
+                newName = ""; newDescription = ""; newPrice = ""; newIngredients = ""; addToStopList = false
+                showAddDialog = false
+            }
+        }
     )
+}
+
+@Composable
+private fun AddDishDialog(
+    name: String,
+    description: String,
+    price: String,
+    ingredients: String,
+    addToStopList: Boolean,
+    onNameChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onPriceChange: (String) -> Unit,
+    onIngredientsChange: (String) -> Unit,
+    onStopListChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onSubmit: () -> Unit
+) {
+    val colors = LocalColors.current
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(.91f).heightIn(max = 760.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = colors.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Добавление блюда", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Закрыть") }
+                }
+                StoqTextField(name, onNameChange, "Название блюда", isRequired = true)
+                StoqTextField(description, onDescriptionChange, "Описание", isRequired = true, singleLine = false, minLines = 3)
+                StoqTextField(price, onPriceChange, "Цена продажи, ₽", isRequired = true)
+                StoqTextField(ingredients, onIngredientsChange, "Ингредиенты", placeholder = "мог", isRequired = true)
+                Text("Себестоимость порции: мог", style = MaterialTheme.typography.titleMedium, color = colors.textSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = addToStopList, onCheckedChange = onStopListChange)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Поместить в стоп-лист", style = MaterialTheme.typography.titleMedium)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
+                    OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+                    Button(onClick = onSubmit, enabled = name.isNotBlank() && description.isNotBlank() && price.isNotBlank() && ingredients.isNotBlank()) { Text("Добавить блюдо") }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -135,7 +212,7 @@ private fun FeatureLinkCard(
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 Box(Modifier.weight(.96f).fillMaxHeight()) {
-                    AsyncImage(image, null, Modifier.fillMaxSize().clip(imageShape), contentScale = ContentScale.Crop)
+                    StoqAsyncImage(image, null, Modifier.fillMaxSize().clip(imageShape), contentScale = ContentScale.Crop)
                     Surface(
                         modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp).size(38.dp),
                         shape = CircleShape,
@@ -163,7 +240,7 @@ private fun FeatureLinkCard(
         DishMetric("Всего блюд", dishes.size.toString(), "+12%", Icons.Outlined.Inventory2, colors.success),
         DishMetric("Активных блюд", dishes.count { it.active }.toString(), "+8%", Icons.Outlined.CheckCircle, colors.success),
         DishMetric("В стоп-листе", dishes.count { !it.active }.toString(), "−25%", Icons.Outlined.PauseCircle, colors.error),
-        DishMetric("Средняя наценка", "${dishes.map { it.markup }.average().toInt()}%", "+5%", Icons.Outlined.Tune, colors.primaryDark)
+        DishMetric("Средняя наценка", dishes.map { it.markup }.filter { it >= 0 }.takeIf { it.isNotEmpty() }?.average()?.toInt()?.let { "$it%" } ?: "мог", "", Icons.Outlined.Tune, colors.primaryDark)
     )
     Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
         entries.chunked(2).forEach { row ->
@@ -187,12 +264,12 @@ private fun FeatureLinkCard(
     val colors = LocalColors.current
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = colors.surface), shape = MaterialTheme.shapes.medium) {
         Row(Modifier.padding(StoqSpacing.Small), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(dish.imageUrl, dish.name, Modifier.size(120.dp).clip(MaterialTheme.shapes.small), contentScale = ContentScale.Crop)
+            StoqAsyncImage(dish.imageUrl, dish.name, Modifier.size(120.dp).clip(MaterialTheme.shapes.small), contentScale = ContentScale.Crop)
             Spacer(Modifier.width(StoqSpacing.Medium)); Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Top) { Text(dish.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, color = colors.textPrimary); StatusPill(dish.active) }
                 Spacer(Modifier.height(3.dp)); Text(dish.description, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis); Spacer(Modifier.height(StoqSpacing.Medium))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    DishCardMetric("Цена", "${dish.price} ₽", Modifier.weight(1f)); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Наценка", "${dish.markup}%", Modifier.weight(1f).padding(start = 6.dp), colors.success); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Ингридиенты", dish.ingredients.size.toString(), Modifier.weight(1f).padding(start = 6.dp))
+                    DishCardMetric("Цена", dish.price.takeIf { it >= 0 }?.let { "$it ₽" } ?: "мог", Modifier.weight(1f)); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Наценка", dish.markup.takeIf { it >= 0 }?.let { "$it%" } ?: "мог", Modifier.weight(1f).padding(start = 6.dp), colors.success); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Ингридиенты", if (dish.recipeLoaded) dish.ingredients.size.toString() else "мог", Modifier.weight(1f).padding(start = 6.dp))
                 }
             }
         }
