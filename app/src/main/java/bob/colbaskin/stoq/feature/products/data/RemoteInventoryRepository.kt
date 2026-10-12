@@ -50,7 +50,7 @@ class RemoteInventoryRepository @Inject constructor(
 private fun InventoryDto.toStorageProduct(): StorageProduct? {
     val product = product ?: return null
     val unit = product.unit?.shortName.orEmpty()
-    val quantity = balance?.availableQuantity ?: 0.0
+    val quantity = availableQuantity ?: balance?.availableQuantity ?: initialQuantity
     return StorageProduct(
         id = product.id,
         batchId = id,

@@ -1,5 +1,6 @@
 package bob.colbaskin.stoq.feature.products.data.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -30,6 +31,8 @@ data class InventoryDto(
     val id: Long,
     val supplyId: Long? = null,
     val productId: Long,
+    @SerialName("Quantity")
+    val availableQuantity: Double? = null,
     val initialQuantity: Double = 0.0,
     val expiresAt: String? = null,
     val status: String? = null,

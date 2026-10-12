@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -49,6 +50,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +60,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
@@ -191,7 +197,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.checkingContent(
             InventoryProductCard(
                 line = line,
                 onQuantityChanged = { onAction(InventoryAction.QuantityChanged(line.product.id, it)) },
-                onChecked = { onAction(InventoryAction.ProductChecked(line.product.id)) }
+                onChecked = { onAction(InventoryAction.ProductChecked(line.product.id)) },
+                onWriteOff = { onAction(InventoryAction.QuantityChanged(line.product.id, 0.0)) }
             )
         }
     }
@@ -229,7 +236,8 @@ private fun InventorySearch(value: String, onValueChange: (String) -> Unit) {
 private fun InventoryProductCard(
     line: InventoryLine,
     onQuantityChanged: (Double) -> Unit,
-    onChecked: () -> Unit
+    onChecked: () -> Unit,
+    onWriteOff: () -> Unit
 ) {
     val colors = LocalColors.current
     StoqCard(contentPadding = PaddingValues(StoqSpacing.Large)) {
@@ -250,35 +258,80 @@ private fun InventoryProductCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             InventoryFact(Icons.Outlined.Inventory2, "По системе", "${line.product.systemQuantity.formatQuantity()} ${line.product.unit}", Modifier.weight(1f))
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-                Text("Фактически", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
-                QuantityStepper(
+                Text("Фактически · ${line.product.unit}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                EditableActualQuantity(
                     quantity = line.actualQuantity,
                     onQuantityChanged = onQuantityChanged,
-                    unit = line.product.unit
+                    onConfirmed = onChecked,
+                    onWriteOff = onWriteOff
                 )
             }
-        }
-        OutlinedButton(
-            onClick = onChecked,
-            modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Medium),
-            enabled = !line.isChecked
-        ) {
-            Icon(if (line.isChecked) Icons.Outlined.CheckCircle else Icons.Outlined.Check, null, modifier = Modifier.size(18.dp))
-            Text(if (line.isChecked) "Проверено" else "Подтвердить количество", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
         }
     }
 }
 
 @Composable
-private fun QuantityStepper(quantity: Double, onQuantityChanged: (Double) -> Unit, unit: String) {
+private fun EditableActualQuantity(
+    quantity: Double,
+    onQuantityChanged: (Double) -> Unit,
+    onConfirmed: () -> Unit,
+    onWriteOff: () -> Unit
+) {
     val colors = LocalColors.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onQuantityChanged((quantity - 1).coerceAtLeast(0.0)) }, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Outlined.Remove, "Уменьшить", tint = colors.primaryDark)
-        }
-        Text("${quantity.formatQuantity()} $unit", style = MaterialTheme.typography.titleMedium, color = colors.textPrimary)
-        IconButton(onClick = { onQuantityChanged(quantity + 1) }, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Outlined.Add, "Увеличить", tint = colors.primaryDark)
+    var editing by remember { mutableStateOf(false) }
+    var value by remember(quantity) { mutableStateOf(quantity.formatQuantity()) }
+    val parsedValue = value.replace(',', '.').toDoubleOrNull()
+    BoxWithConstraints {
+        val maximumFieldWidth = (maxWidth - 38.dp).coerceAtLeast(0.dp)
+        val desiredFieldWidth = (78 + value.length * 10).dp.coerceAtMost(maximumFieldWidth)
+        val fieldWidth = desiredFieldWidth.coerceAtLeast(minOf(126.dp, maximumFieldWidth))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (editing) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    modifier = Modifier.width(fieldWidth),
+                    singleLine = true,
+                    isError = value.isNotBlank() && parsedValue == null,
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                parsedValue?.let {
+                                    onQuantityChanged(it.coerceAtLeast(0.0))
+                                    onConfirmed()
+                                    editing = false
+                                }
+                            },
+                            enabled = parsedValue != null
+                        ) { Icon(Icons.Outlined.Check, "Подтвердить количество", tint = colors.success) }
+                    },
+                    shape = MaterialTheme.shapes.small,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.primaryDark,
+                        unfocusedBorderColor = colors.outline
+                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.width(fieldWidth).clip(MaterialTheme.shapes.small).clickable { editing = true },
+                    shape = MaterialTheme.shapes.small,
+                    color = colors.surfaceSecondary
+                ) {
+                    Text(
+                        quantity.formatQuantity(),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            IconButton(onClick = onWriteOff, modifier = Modifier.size(38.dp)) {
+                Icon(Icons.Outlined.DeleteOutline, "Списать продукт", tint = colors.error)
+            }
         }
     }
 }
