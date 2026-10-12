@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.AccessTime
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,12 +38,16 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,14 +58,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bob.colbaskin.stoq.R
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
+import bob.colbaskin.stoq.feature.products.data.StorageProduct
 
 private enum class ProductStatus { Normal, LowStock, Expiring }
 
 private data class Product(
+    val id: Long,
     val name: String,
     val article: String,
     val category: String,
@@ -75,29 +83,22 @@ private data class Product(
     val imageRes: Int
 )
 
-private val catalogProducts = listOf(
-    Product("Помидоры свежие", "00123", "Овощи", "12 кг", "10 кг", "2", "5 дней", "до 25.04.2024", ProductStatus.Normal, R.drawable.product_tomatoes),
-    Product("Куриное филе", "00456", "Мясо", "5 кг", "10 кг", "3", "3 дня", "до 23.04.2024", ProductStatus.LowStock, R.drawable.product_chicken),
-    Product("Сыр моцарелла", "00789", "Молочные", "8 кг", "5 кг", "2", "12 дней", "до 02.05.2024", ProductStatus.Normal, R.drawable.product_mozzarella),
-    Product("Салат айсберг", "00112", "Овощи", "20 шт", "15 шт", "1", "4 дня", "до 24.04.2024", ProductStatus.Expiring, R.drawable.product_iceberg),
-    Product("Лосось атлантический", "00987", "Рыба", "6 кг", "5 кг", "2", "2 дня", "до 22.04.2024", ProductStatus.Expiring, R.drawable.product_salmon)
-)
-
-private val categories = listOf(
-    "Все" to "128",
-    "Овощи" to "24",
-    "Фрукты" to "16",
-    "Мясо" to "14",
-    "Рыба" to "9",
-    "Молочные" to "18"
-)
-
 @Composable
-fun StorageScreen(onInventoryClick: () -> Unit) {
+fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hiltViewModel()) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var query by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(categories.first().first) }
-    var showAddDialog by remember { mutableStateOf(false) }
-    val filteredProducts = remember(query, selectedCategory) {
+    var selectedCategory by remember { mutableStateOf("Все") }
+    val inventoryState = viewModel.state
+    val catalogProducts = (inventoryState as? UiState.Success)?.data.orEmpty().map(StorageProduct::toProduct)
+    val categories = listOf("Все" to catalogProducts.size.toString())
+    val filteredProducts = remember(query, selectedCategory, catalogProducts) {
         catalogProducts.filter { product ->
             val matchesCategory = selectedCategory == categories.first().first || selectedCategory.equals(product.category, ignoreCase = true)
             val matchesQuery = listOf(product.name, product.article, product.category).any { it.contains(query, ignoreCase = true) }
@@ -118,7 +119,7 @@ fun StorageScreen(onInventoryClick: () -> Unit) {
             }
         }
         item { ProductSearchField(query, { query = it }) }
-        item { ProductMetrics() }
+        item { ProductMetrics(catalogProducts) }
         item { StoqPrimaryButton(text = "Провести инвентаризацию", onClick = onInventoryClick) }
         item {
             Row(
@@ -133,15 +134,12 @@ fun StorageScreen(onInventoryClick: () -> Unit) {
         item { ExpiryBanner() }
         items(filteredProducts, key = { it.article }) { product -> ProductCard(product) }
     }
-    FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
+    FloatingActionButton(onClick = { }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
+    when (inventoryState) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(inventoryState.title, inventoryState.text, viewModel::refresh)
+        is UiState.Success -> Unit
     }
-    if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            title = { Text("Новый продукт") },
-            text = { Text("Создание продукта будет доступно после подключения каталога к API.") },
-            confirmButton = { TextButton(onClick = { showAddDialog = false }) { Text("Понятно") } }
-        )
     }
 }
 
@@ -165,13 +163,13 @@ private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
 }
 
 @Composable
-private fun ProductMetrics() {
+private fun ProductMetrics(products: List<Product>) {
     val colors = CustomTheme.colors
     val metrics = listOf(
-        StorageMetric("Всего продуктов", "128", "+12%", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
-        StorageMetric("С низким остатком", "12", "+3", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
-        StorageMetric("Скоро истекут", "8", "+2", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
-        StorageMetric("Поставщиков", "14", "+7%", "активных поставщиков", Icons.Outlined.Group, colors.success)
+        StorageMetric("Всего продуктов", products.size.toString(), "мог", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
+        StorageMetric("С низким остатком", "мог", "мог", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
+        StorageMetric("Скоро истекут", products.count { it.expiry != "мог" }.toString(), "мог", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
+        StorageMetric("Поставщиков", "мог", "мог", "активных поставщиков", Icons.Outlined.Group, colors.success)
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
         metrics.chunked(2).forEach { row ->
@@ -283,6 +281,20 @@ private fun ProductCard(product: Product) {
         }
     }
 }
+
+private fun StorageProduct.toProduct() = Product(
+    id = id,
+    name = name,
+    article = id.toString(),
+    category = "мог",
+    currentStock = currentStock.ifBlank { "мог" },
+    minimumStock = "мог",
+    suppliers = "мог",
+    expiry = expiryDate ?: "мог",
+    expiryDate = expiryDate ?: "мог",
+    status = ProductStatus.Normal,
+    imageRes = R.drawable.stoq_leaf
+)
 
 @Composable
 private fun CategoryPill(category: String) {
