@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,24 +46,34 @@ fun ErrorScreen(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(StoqSpacing.ExtraLarge),
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(StoqSpacing.ExtraLarge),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = title, style = MaterialTheme.typography.titleLarge)
-        Text(
-            text = text,
-            modifier = Modifier.padding(top = StoqSpacing.Small),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        StoqPrimaryButton(
-            text = "Повторить",
-            onClick = onRetry,
-            modifier = Modifier.padding(top = StoqSpacing.Large)
-        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(StoqSpacing.Medium),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(StoqSpacing.Large),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(text = title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                Text(
+                    text = text,
+                    modifier = Modifier.padding(top = StoqSpacing.Small),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 4
+                )
+                StoqPrimaryButton(
+                    text = "Повторить",
+                    onClick = onRetry,
+                    modifier = Modifier.padding(top = StoqSpacing.Large)
+                )
+            }
+        }
     }
 }

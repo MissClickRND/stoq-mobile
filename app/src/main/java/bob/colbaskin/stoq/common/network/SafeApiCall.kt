@@ -22,12 +22,11 @@ suspend inline fun <reified T, reified R> safeApiCall(
         )
         is HttpException -> ApiResult.Error(
             title = "Не удалось выполнить запрос",
-            text = exception.response()?.errorBody()?.string().orEmpty()
-                .ifBlank { exception.message() }
+            text = "Сервер вернул ошибку ${exception.code()}. Проверьте введённые данные и повторите попытку."
         )
         else -> ApiResult.Error(
             title = "Что-то пошло не так",
-            text = exception.message.orEmpty().ifBlank { "Повторите попытку позже." }
+            text = "Не удалось обработать ответ сервера. Повторите попытку позже."
         )
     }
 }

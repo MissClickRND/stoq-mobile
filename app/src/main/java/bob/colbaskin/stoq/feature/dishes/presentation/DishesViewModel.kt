@@ -63,8 +63,15 @@ class DishesViewModel @Inject constructor(
         }
     }
 
-    fun updateQuery(query: String) { state = state.copy(query = query, dishes = state.filtered()) }
-    fun selectCategory(category: String) { state = state.copy(category = category, dishes = state.filtered()) }
+    fun updateQuery(query: String) {
+        val updated = state.copy(query = query)
+        state = updated.copy(dishes = updated.filtered())
+    }
+
+    fun selectCategory(category: String) {
+        val updated = state.copy(category = category)
+        state = updated.copy(dishes = updated.filtered())
+    }
     fun collectionFilters(recommended: Boolean) = if (recommended) recommendationsFilterState else stopListFilterState
     fun updateCollectionFilters(recommended: Boolean, update: (CollectionFilterState) -> CollectionFilterState) {
         if (recommended) recommendationsFilterState = update(recommendationsFilterState)
@@ -115,10 +122,19 @@ class DishDetailsViewModel @Inject constructor(
 ) : ViewModel() {
     var state by mutableStateOf<UiState<Dish>>(UiState.Loading)
         private set
+    var deleteState by mutableStateOf<UiState<Unit>?>(null)
+        private set
 
     fun load(id: String) = viewModelScope.launch {
         val numericId = id.toLongOrNull()
         state = if (numericId == null) UiState.Error("Некорректный идентификатор", "Блюдо не удалось загрузить.") else UiState.Loading
         if (numericId != null) state = repository.getDish(numericId)
+    }
+
+    fun delete(id: String, onSuccess: () -> Unit) = viewModelScope.launch {
+        val numericId = id.toLongOrNull() ?: return@launch
+        deleteState = UiState.Loading
+        deleteState = repository.deleteDish(numericId)
+        if (deleteState is UiState.Success) onSuccess()
     }
 }
