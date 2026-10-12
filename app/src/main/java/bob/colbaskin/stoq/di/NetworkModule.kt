@@ -2,6 +2,8 @@ package bob.colbaskin.stoq.di
 
 import bob.colbaskin.stoq.BuildConfig
 import bob.colbaskin.stoq.feature.auth.data.remote.AuthApiService
+import bob.colbaskin.stoq.feature.dishes.data.remote.DishesApiService
+import bob.colbaskin.stoq.feature.products.data.remote.InventoryApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -50,4 +52,12 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideAuthApiService(retrofit: Retrofit): AuthApiService = retrofit.create(AuthApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideDishesApiService(retrofit: Retrofit): DishesApiService = retrofit.create(DishesApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideInventoryApiService(retrofit: Retrofit): InventoryApiService = retrofit.create(InventoryApiService::class.java)
 }
