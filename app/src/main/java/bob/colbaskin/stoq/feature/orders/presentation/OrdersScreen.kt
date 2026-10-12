@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.TableRestaurant
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,6 +87,9 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.R
@@ -109,7 +113,6 @@ fun OrdersScreen(
     viewModel: OrdersViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    LaunchedEffect(Unit) { viewModel.reload() }
     val orders = state.orders.filter { order ->
         val matchesText = state.query.isBlank() || (listOf(order.id, order.customer, order.location) + order.items.map { it.name }).any { it.contains(state.query, true) }
         val matchesStatus = state.status == null || order.status == state.status
@@ -117,48 +120,67 @@ fun OrdersScreen(
         matchesText && matchesStatus && matchesType
     }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        LazyColumn(
-            contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item { ScreenHeader("Заказы", "Отслеживайте и обрабатывайте заказы вашего ресторана") }
-            item { OrderSearch(state.query) { viewModel.onAction(OrdersAction.Query(it)) } }
-            item { MetricsGrid(state) }
-            item { Filters(state, viewModel::onAction) }
-            items(orders, key = { it.id }) { OrderCard(it, onOrderClick) }
+        when (val loadState = state.loadState) {
+            UiState.Loading -> LoadingScreen()
+            is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::reload)
+            is UiState.Success -> {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item { ScreenHeader("Заказы", "Отслеживайте и обрабатывайте заказы вашего ресторана") }
+                    item { OrderSearch(state.query) { viewModel.onAction(OrdersAction.Query(it)) } }
+                    item { MetricsGrid(state) }
+                    item { Filters(state, viewModel::onAction) }
+                    items(orders, key = { it.id }) { OrderCard(it, onOrderClick) }
+                }
+                FloatingActionButton(
+                    onClick = onCreateOrder,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
+                    containerColor = CustomTheme.colors.primary,
+                    contentColor = CustomTheme.colors.textOnPrimary,
+                    shape = CircleShape
+                ) { Icon(Icons.Outlined.Add, "Создать заказ", modifier = Modifier.size(30.dp)) }
+            }
         }
-        FloatingActionButton(
-            onClick = onCreateOrder,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
-            containerColor = CustomTheme.colors.primary,
-            contentColor = CustomTheme.colors.textOnPrimary,
-            shape = CircleShape
-        ) { Icon(Icons.Outlined.Add, "Создать заказ", modifier = Modifier.size(30.dp)) }
     }
 }
 
 @Composable
 fun CreateOrderScreen(onBack: () -> Unit, viewModel: OrdersViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
-    val menu = viewModel.menu().filter { state.menuQuery.isBlank() || it.name.contains(state.menuQuery, true) }
+    when (val loadState = state.loadState) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::reload, onBack)
+        is UiState.Success -> CreateOrderContent(state, onBack, viewModel::onAction)
+    }
+}
+
+@Composable
+private fun CreateOrderContent(
+    state: OrdersState,
+    onBack: () -> Unit,
+    onAction: (OrdersAction) -> Unit
+) {
+    val menu = state.menu.filter { state.menuQuery.isBlank() || it.name.contains(state.menuQuery, true) }
     var guestOrderDialogVisible by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { ScreenHeader("Новый заказ", "Добавьте блюда в заказ и проверьте доступность ингредиентов", onBack) }
-        item { NewOrderParameters(state, viewModel::onAction) }
-        item { DishPicker(state.menuQuery, menu, viewModel::onAction) { guestOrderDialogVisible = true } }
+        item { ScreenHeader("Новый заказ", "Добавьте блюда в заказ", onBack) }
+        item { NewOrderParameters(state, onAction) }
+        item { DishPicker(state.menuQuery, menu, onAction) { guestOrderDialogVisible = true } }
         item { OrderSummary(state) }
         item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
-        items(state.basket, key = { it.dishId }) { BasketItem(it, viewModel::onAction) }
+        items(state.basket, key = { it.dishId }) { BasketItem(it, onAction) }
         if (state.created) {
-            item { CreatedBanner { viewModel.onAction(OrdersAction.ResetCreation); onBack() } }
+            item { CreatedBanner { onAction(OrdersAction.ResetCreation); onBack() } }
         } else if (state.basket.isNotEmpty()) {
             if (state.checked && state.basket.any { it.availability == Availability.Unavailable }) item { ErrorBanner("Нельзя создать заказ", "1 блюдо недоступно") }
             state.error?.let { text -> item { ErrorBanner("Ошибка заказа", text) } }
-            item { CreateActions(state, viewModel::onAction, onBack) }
+            item { CreateActions(state, onAction, onBack) }
         } else item { EmptyBasket() }
         item { Spacer(Modifier.height(22.dp)) }
     }
@@ -171,22 +193,50 @@ fun CreateOrderScreen(onBack: () -> Unit, viewModel: OrdersViewModel = hiltViewM
 fun OrderDetailsScreen(
     orderId: String,
     onBack: () -> Unit,
-    viewModel: OrdersViewModel = hiltViewModel()
+    viewModel: OrderDetailsViewModel = hiltViewModel()
 ) {
-    val order = viewModel.order(orderId)
+    val state by viewModel.state.collectAsState()
+    var deleteDialogVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(orderId) { viewModel.load(orderId) }
+    when (val orderState = state) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(orderState.title, orderState.text, { viewModel.load(orderId) }, onBack)
+        is UiState.Success -> OrderDetailsContent(orderId, orderState.data, onBack) { deleteDialogVisible = true }
+    }
+    if (deleteDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { deleteDialogVisible = false },
+            title = { Text("Удалить заказ?") },
+            text = { Text("Заказ #$orderId будет удалён без возможности восстановления.") },
+            confirmButton = {
+                Button(onClick = { deleteDialogVisible = false; viewModel.delete(orderId, onBack) }) { Text("Удалить") }
+            },
+            dismissButton = { OutlinedButton(onClick = { deleteDialogVisible = false }) { Text("Отмена") } }
+        )
+    }
+}
+
+@Composable
+private fun OrderDetailsContent(orderId: String, order: Order, onBack: () -> Unit, onDelete: () -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { ScreenHeader("Заказ #$orderId", "Подробная информация и состав заказа", onBack) }
-        if (order == null) {
-            item { EmptyOrderDetails() }
-        } else {
-            item { OrderDetailsInfo(order) }
-            item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
-            items(order.items, key = { it.dishId }) { OrderDetailItem(it) }
-            item { OrderDetailsSummary(order) }
+        item { OrderDetailsInfo(order) }
+        item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
+        items(order.items, key = { it.dishId }) { OrderDetailItem(it) }
+        item { OrderDetailsSummary(order) }
+        item {
+            OutlinedButton(
+                onClick = onDelete,
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, CustomTheme.colors.error)
+            ) {
+                Icon(Icons.Outlined.DeleteOutline, null, tint = CustomTheme.colors.error)
+                Text("Удалить заказ", modifier = Modifier.padding(start = StoqSpacing.Small), color = CustomTheme.colors.error)
+            }
         }
         item { Spacer(Modifier.height(20.dp)) }
     }
@@ -361,7 +411,7 @@ private fun OrderDetailItem(item: OrderItem) = StoqCard(Modifier.fillMaxWidth(),
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(money(item.price * item.quantity), style = MaterialTheme.typography.titleMedium)
-            StoqStatusPill(if (item.availability == Availability.Available) "Доступно" else "Недоступно", if (item.availability == Availability.Available) StoqStatusTone.Success else StoqStatusTone.Error, Modifier.padding(top = 5.dp))
+            StoqStatusPill(item.availability.label(), item.availability.tone(), Modifier.padding(top = 5.dp))
         }
     }
 }
@@ -537,7 +587,7 @@ private fun BasketItem(item: OrderItem, action: (OrdersAction) -> Unit) = StoqCa
     Row(verticalAlignment = Alignment.Top) {
         DishImage(item, 70.dp); Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Row { Column(Modifier.weight(1f)) { Text(item.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis); Text(item.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; StoqStatusPill(if (item.availability == Availability.Available) "Доступно" else "Недоступно", if (item.availability == Availability.Available) StoqStatusTone.Success else StoqStatusTone.Error) }
+            Row { Column(Modifier.weight(1f)) { Text(item.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis); Text(item.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; StoqStatusPill(item.availability.label(), item.availability.tone()) }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) { QuantityControl(item.quantity, { action(OrdersAction.ChangeQuantity(item.dishId, -1)) }, { action(OrdersAction.ChangeQuantity(item.dishId, 1)) }); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(money(item.price), style = MaterialTheme.typography.labelLarge); Text("Цена за ед.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Column(horizontalAlignment = Alignment.End) { Text(money(item.price * item.quantity), style = MaterialTheme.typography.titleMedium); Text("Сумма", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Icon(Icons.Outlined.DeleteOutline, "Удалить", Modifier.padding(start = 8.dp).size(25.dp).clickable { action(OrdersAction.Remove(item.dishId)) }, tint = CustomTheme.colors.error) }
         }
     }
@@ -561,7 +611,7 @@ private fun CreateActions(state: OrdersState, action: (OrdersAction) -> Unit, on
     if (state.saved) Text("Черновик сохранён", style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.success)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button({ action(OrdersAction.Save) }, Modifier.weight(1f).height(52.dp), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Text("Сохранить") }
-        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && state.checked && state.basket.none { it.availability == Availability.Unavailable } && state.error == null, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text("Создать заказ  →") }
+        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && !state.isCreating && state.error == null, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Создание…" else "Создать заказ  →") }
     }
 }
 
@@ -606,4 +656,6 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(focusedBorderColor 
 
 private fun OrderStatus.label() = when (this) { OrderStatus.Processing -> "В обработке"; OrderStatus.Preparing -> "Готовится"; OrderStatus.Completed -> "Выполнен" }
 private fun OrderStatus.tone() = when (this) { OrderStatus.Processing -> StoqStatusTone.Warning; OrderStatus.Preparing -> StoqStatusTone.Info; OrderStatus.Completed -> StoqStatusTone.Success }
+private fun Availability.label() = when (this) { Availability.Available -> "Доступно"; Availability.Unavailable -> "Недоступно"; Availability.Unknown -> "мог" }
+private fun Availability.tone() = when (this) { Availability.Available -> StoqStatusTone.Success; Availability.Unavailable -> StoqStatusTone.Error; Availability.Unknown -> StoqStatusTone.Info }
 private fun money(value: Int) = "${String.format("%,d", value).replace(',', ' ')} ₽"
