@@ -2,6 +2,7 @@ package bob.colbaskin.stoq.common.designsystem.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +45,7 @@ fun ErrorScreen(
     title: String,
     text: String,
     onRetry: () -> Unit,
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -68,11 +71,21 @@ fun ErrorScreen(
                     textAlign = TextAlign.Center,
                     maxLines = 4
                 )
-                StoqPrimaryButton(
-                    text = "Повторить",
-                    onClick = onRetry,
-                    modifier = Modifier.padding(top = StoqSpacing.Large)
-                )
+                if (onBack == null) {
+                    StoqPrimaryButton(
+                        text = "Повторить",
+                        onClick = onRetry,
+                        modifier = Modifier.padding(top = StoqSpacing.Large)
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Large),
+                        horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)
+                    ) {
+                        OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Назад") }
+                        StoqPrimaryButton(text = "Повторить", onClick = onRetry, modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }

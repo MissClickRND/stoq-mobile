@@ -208,11 +208,20 @@ private fun DishIngredientEditor(
                 readOnly = true,
                 trailingIcon = { IconButton(onClick = { expanded = true }) { Icon(Icons.Outlined.ExpandMore, "Выбрать товар") } }
             )
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                shape = MaterialTheme.shapes.medium,
+                containerColor = LocalColors.current.surface,
+                tonalElevation = 0.dp,
+                shadowElevation = 8.dp,
+                border = BorderStroke(1.dp, LocalColors.current.outline)
+            ) {
                 products.forEach { product ->
                     DropdownMenuItem(
-                        text = { Text("${product.name} (${product.unit?.shortName ?: "мог"})") },
-                        onClick = { onChange(ingredient.copy(productId = product.id)); expanded = false }
+                        text = { Text("${product.name} (${product.unit?.shortName ?: "мог"})", style = MaterialTheme.typography.bodyMedium, color = LocalColors.current.textPrimary) },
+                        onClick = { onChange(ingredient.copy(productId = product.id)); expanded = false },
+                        modifier = Modifier.background(if (product.id == ingredient.productId) LocalColors.current.primary.copy(alpha = .14f) else LocalColors.current.surface)
                     )
                 }
             }

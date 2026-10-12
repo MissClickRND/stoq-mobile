@@ -217,11 +217,20 @@ private fun AddProductDialog(
                         readOnly = true,
                         trailingIcon = { IconButton(onClick = { unitsExpanded = true }) { Icon(Icons.Outlined.ExpandMore, "Выбрать единицу") } }
                     )
-                    DropdownMenu(expanded = unitsExpanded, onDismissRequest = { unitsExpanded = false }) {
+                    DropdownMenu(
+                        expanded = unitsExpanded,
+                        onDismissRequest = { unitsExpanded = false },
+                        shape = MaterialTheme.shapes.medium,
+                        containerColor = CustomTheme.colors.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, CustomTheme.colors.outline)
+                    ) {
                         units.forEach { unit ->
                             DropdownMenuItem(
-                                text = { Text("${unit.name.orEmpty()} (${unit.shortName.orEmpty()})") },
-                                onClick = { selectedUnitId = unit.id; unitsExpanded = false }
+                                text = { Text("${unit.name.orEmpty()} (${unit.shortName.orEmpty()})", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textPrimary) },
+                                onClick = { selectedUnitId = unit.id; unitsExpanded = false },
+                                modifier = Modifier.background(if (unit.id == selectedUnitId) CustomTheme.colors.primary.copy(alpha = .14f) else CustomTheme.colors.surface)
                             )
                         }
                     }

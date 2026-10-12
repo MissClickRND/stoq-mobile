@@ -143,7 +143,7 @@ fun SupplyDetailsScreen(
     }
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()
-        is UiState.Error -> ErrorScreen(state.title, state.text, onRetry = { viewModel.load(supplyNumber) })
+        is UiState.Error -> ErrorScreen(state.title, state.text, onRetry = { viewModel.load(supplyNumber) }, onBack = onBack)
         is UiState.Success -> Unit
     }
 }

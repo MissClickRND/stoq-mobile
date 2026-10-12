@@ -100,7 +100,7 @@ fun InventoryScreen(
     }
     when (val loadState = state.loadingState) {
         UiState.Loading -> LoadingScreen()
-        is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::onRetry)
+        is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::onRetry, onBack = onBack)
         is UiState.Success -> Unit
     }
     if (state.isApplying) LoadingScreen()

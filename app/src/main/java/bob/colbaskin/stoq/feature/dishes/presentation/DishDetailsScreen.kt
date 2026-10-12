@@ -43,7 +43,7 @@ fun DishDetailsScreen(id: String, onBack: () -> Unit, viewModel: DishDetailsView
     var confirmDeletion by remember { mutableStateOf(false) }
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()
-        is UiState.Error -> ErrorScreen(title = state.title, text = state.text, onRetry = { viewModel.load(id) })
+        is UiState.Error -> ErrorScreen(title = state.title, text = state.text, onRetry = { viewModel.load(id) }, onBack = onBack)
         is UiState.Success -> DishDetailsContent(state.data, onBack, onDelete = { confirmDeletion = true })
     }
     if (confirmDeletion) {
