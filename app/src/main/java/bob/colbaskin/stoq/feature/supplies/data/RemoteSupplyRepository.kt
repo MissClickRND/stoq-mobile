@@ -6,6 +6,7 @@ import bob.colbaskin.stoq.common.network.safeApiCall
 import bob.colbaskin.stoq.feature.products.data.RemoteProductRepository
 import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyDto
 import bob.colbaskin.stoq.feature.supplies.data.model.SupplyDto
+import bob.colbaskin.stoq.feature.supplies.data.model.SupplyItemDto
 import bob.colbaskin.stoq.feature.supplies.data.remote.SuppliesApiService
 import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
@@ -40,7 +41,12 @@ class RemoteSupplyRepository @Inject constructor(
                 is UiState.Success -> result.data.associateBy { it.id }
                 else -> emptyMap()
             }
-            api.getSupplies().map { it.toSupply(products) }
+            api.getSupplies()
+                .groupBy(SupplyDto::id)
+                .map { (_, rows) ->
+                    val flattenedItems = rows.mapNotNull { it.toListItem(products) }
+                    rows.first().toSupply(products, flattenedItems.takeIf { it.isNotEmpty() })
+                }
         },
         successHandler = { it }
     ).toUiState()
@@ -61,21 +67,45 @@ class RemoteSupplyRepository @Inject constructor(
     ).toUiState()
 }
 
-private fun SupplyDto.toSupply(products: Map<Long, bob.colbaskin.stoq.feature.products.data.model.ProductDto>) = Supply(
+private fun SupplyDto.toSupply(
+    products: Map<Long, bob.colbaskin.stoq.feature.products.data.model.ProductDto>,
+    listItems: List<SupplyItem>? = null
+) = Supply(
     id = id,
     number = supplyNumber,
     status = status.orEmpty(),
     receivedAt = receivedAt,
     createdAt = createdAt,
-    items = items.map { item ->
-        val product = products[item.productId]
-        SupplyItem(
-            id = item.id,
-            productId = item.productId,
-            productName = product?.name ?: "Товар #${item.productId}",
-            unit = product?.unit?.shortName.orEmpty(),
-            quantity = item.quantity.jsonPrimitive.content.toDoubleOrNull() ?: 0.0,
-            expiresAt = item.expiresAt
-        )
-    }
+    items = listItems ?: items.map { it.toSupplyItem(products) }
 )
+
+private fun SupplyDto.toListItem(
+    products: Map<Long, bob.colbaskin.stoq.feature.products.data.model.ProductDto>
+): SupplyItem? {
+    val responseProduct = product ?: return null
+    val productId = responseProduct.id ?: return null
+    val fallback = products[productId]
+    return SupplyItem(
+        id = productId,
+        productId = productId,
+        productName = responseProduct.name ?: fallback?.name ?: "Товар #$productId",
+        unit = responseProduct.unit?.shortName ?: fallback?.unit?.shortName.orEmpty(),
+        quantity = 0.0,
+        expiresAt = null
+    )
+}
+
+private fun SupplyItemDto.toSupplyItem(
+    products: Map<Long, bob.colbaskin.stoq.feature.products.data.model.ProductDto>
+): SupplyItem {
+    val resolvedProductId = productId ?: product?.id ?: 0L
+    val fallback = products[resolvedProductId]
+    return SupplyItem(
+        id = id ?: supplyItemId ?: resolvedProductId,
+        productId = resolvedProductId,
+        productName = product?.name ?: fallback?.name ?: "Товар #$resolvedProductId",
+        unit = product?.unit?.shortName ?: fallback?.unit?.shortName.orEmpty(),
+        quantity = quantity?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+        expiresAt = expiresAt
+    )
+}
