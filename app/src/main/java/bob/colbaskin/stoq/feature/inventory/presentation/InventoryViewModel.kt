@@ -2,6 +2,7 @@ package bob.colbaskin.stoq.feature.inventory.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.feature.inventory.domain.InventoryRepository
 import bob.colbaskin.stoq.feature.inventory.domain.model.InventoryProduct
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,13 +17,13 @@ enum class InventoryStep { Checking, Confirmation, Report }
 
 data class InventoryLine(
     val product: InventoryProduct,
-    val actualQuantity: Int = product.systemQuantity,
+    val actualQuantity: Double = product.systemQuantity,
     val isChecked: Boolean = false
 ) {
-    val difference: Int
+    val difference: Double
         get() = actualQuantity - product.systemQuantity
     val isDeleted: Boolean
-        get() = actualQuantity == 0
+        get() = actualQuantity == 0.0
 }
 
 data class InventoryState(
@@ -31,10 +32,12 @@ data class InventoryState(
     val lines: List<InventoryLine> = emptyList(),
     val isConfirmed: Boolean = false,
     val completedAt: LocalDateTime? = null,
-    val notice: String? = null
+    val notice: String? = null,
+    val loadingState: UiState<Unit> = UiState.Loading,
+    val isApplying: Boolean = false
 ) {
     val changedLines: List<InventoryLine>
-        get() = lines.filter { it.difference != 0 }
+        get() = lines.filter { it.difference != 0.0 }
     val deletedLines: List<InventoryLine>
         get() = lines.filter { it.isDeleted }
     val checkedLines: Int
@@ -43,7 +46,7 @@ data class InventoryState(
 
 sealed interface InventoryAction {
     data class QueryChanged(val value: String) : InventoryAction
-    data class QuantityChanged(val productId: String, val value: Int) : InventoryAction
+    data class QuantityChanged(val productId: String, val value: Double) : InventoryAction
     data class ProductChecked(val productId: String) : InventoryAction
     data object ProceedToConfirmation : InventoryAction
     data object BackToChecking : InventoryAction
@@ -59,15 +62,19 @@ sealed interface InventoryAction {
 class InventoryViewModel @Inject constructor(
     private val repository: InventoryRepository
 ) : ViewModel() {
-    private val _state = MutableStateFlow(InventoryState(lines = inventoryLines()))
+    private val _state = MutableStateFlow(InventoryState())
     val state = _state.asStateFlow()
+
+    init { refresh() }
+
+    fun onRetry() = refresh()
 
     fun onAction(action: InventoryAction) = viewModelScope.launch {
         when (action) {
             is InventoryAction.QueryChanged -> _state.update { it.copy(query = action.value) }
             is InventoryAction.QuantityChanged -> _state.update { state ->
                 state.copy(lines = state.lines.map { line ->
-                    if (line.product.id == action.productId) line.copy(actualQuantity = action.value.coerceAtLeast(0), isChecked = true) else line
+                    if (line.product.id == action.productId) line.copy(actualQuantity = action.value.coerceAtLeast(0.0), isChecked = true) else line
                 })
             }
             is InventoryAction.ProductChecked -> _state.update { state ->
@@ -76,15 +83,30 @@ class InventoryViewModel @Inject constructor(
             InventoryAction.ProceedToConfirmation -> _state.update { it.copy(step = InventoryStep.Confirmation, notice = null) }
             InventoryAction.BackToChecking -> _state.update { it.copy(step = InventoryStep.Checking, isConfirmed = false, notice = null) }
             is InventoryAction.ConfirmationChanged -> _state.update { it.copy(isConfirmed = action.value) }
-            InventoryAction.ApplyChanges -> _state.update {
-                it.copy(step = InventoryStep.Report, completedAt = LocalDateTime.now(), notice = null)
-            }
-            InventoryAction.StartNew -> _state.update { InventoryState(lines = inventoryLines()) }
+            InventoryAction.ApplyChanges -> applyChanges()
+            InventoryAction.StartNew -> refresh()
             InventoryAction.SaveDraft -> _state.update { it.copy(notice = "Черновик инвентаризации сохранён") }
             is InventoryAction.ReportSaved -> _state.update { it.copy(notice = "Отчёт сохранён в формате ${action.format}") }
             InventoryAction.NoticeDismissed -> _state.update { it.copy(notice = null) }
         }
     }
 
-    private fun inventoryLines() = repository.products().map(::InventoryLine)
+    private fun refresh() = viewModelScope.launch {
+        _state.value = InventoryState(loadingState = UiState.Loading)
+        when (val result = repository.products()) {
+            is UiState.Success -> _state.value = InventoryState(lines = result.data.map(::InventoryLine), loadingState = UiState.Success(Unit))
+            is UiState.Error -> _state.value = InventoryState(loadingState = result)
+            UiState.Loading -> Unit
+        }
+    }
+
+    private suspend fun applyChanges() {
+        val changes = _state.value.changedLines.map { it.product.batchId to it.actualQuantity }
+        _state.update { it.copy(isApplying = true, notice = null) }
+        when (val result = repository.updateQuantities(changes)) {
+            is UiState.Success -> _state.update { it.copy(step = InventoryStep.Report, completedAt = LocalDateTime.now(), notice = null, isApplying = false) }
+            is UiState.Error -> _state.update { it.copy(isApplying = false, notice = "${result.title}: ${result.text}") }
+            UiState.Loading -> Unit
+        }
+    }
 }

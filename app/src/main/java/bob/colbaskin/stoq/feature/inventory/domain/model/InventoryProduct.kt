@@ -1,19 +1,11 @@
 package bob.colbaskin.stoq.feature.inventory.domain.model
 
-enum class InventoryProductImage {
-    Tomatoes,
-    Mozzarella,
-    Salmon,
-    Iceberg,
-    Chicken
-}
-
 data class InventoryProduct(
     val id: String,
+    val batchId: Long,
     val name: String,
     val article: String,
     val category: String,
-    val systemQuantity: Int,
-    val unit: String,
-    val image: InventoryProductImage
+    val systemQuantity: Double,
+    val unit: String
 )

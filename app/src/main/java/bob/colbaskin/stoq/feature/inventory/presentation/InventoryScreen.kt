@@ -54,19 +54,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import bob.colbaskin.stoq.R
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
-import bob.colbaskin.stoq.feature.inventory.domain.model.InventoryProductImage
 
 @Composable
 fun InventoryScreen(
@@ -76,8 +77,9 @@ fun InventoryScreen(
     val state by viewModel.state.collectAsState()
     val colors = LocalColors.current
 
+    Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(colors.background),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = StoqSpacing.Medium),
         verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)
     ) {
@@ -95,6 +97,13 @@ fun InventoryScreen(
             InventoryStep.Confirmation -> confirmationContent(state, viewModel::onAction)
             InventoryStep.Report -> reportContent(state, viewModel::onAction)
         }
+    }
+    when (val loadState = state.loadingState) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::onRetry)
+        is UiState.Success -> Unit
+    }
+    if (state.isApplying) LoadingScreen()
     }
 }
 
@@ -219,18 +228,13 @@ private fun InventorySearch(value: String, onValueChange: (String) -> Unit) {
 @Composable
 private fun InventoryProductCard(
     line: InventoryLine,
-    onQuantityChanged: (Int) -> Unit,
+    onQuantityChanged: (Double) -> Unit,
     onChecked: () -> Unit
 ) {
     val colors = LocalColors.current
     StoqCard(contentPadding = PaddingValues(StoqSpacing.Large)) {
         Row(verticalAlignment = Alignment.Top) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(imageResource(line.product.image)),
-                contentDescription = line.product.name,
-                modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small),
-                contentScale = ContentScale.Crop
-            )
+            StoqAsyncImage(null, line.product.name, Modifier.size(64.dp).clip(MaterialTheme.shapes.small), contentScale = ContentScale.Crop)
             Column(modifier = Modifier.weight(1f).padding(start = StoqSpacing.Medium)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -244,7 +248,7 @@ private fun InventoryProductCard(
         }
         HorizontalDivider(Modifier.padding(vertical = StoqSpacing.Medium), color = colors.outline.copy(alpha = 0.55f))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            InventoryFact(Icons.Outlined.Inventory2, "По системе", "${line.product.systemQuantity} ${line.product.unit}", Modifier.weight(1f))
+            InventoryFact(Icons.Outlined.Inventory2, "По системе", "${line.product.systemQuantity.formatQuantity()} ${line.product.unit}", Modifier.weight(1f))
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                 Text("Фактически", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                 QuantityStepper(
@@ -266,13 +270,13 @@ private fun InventoryProductCard(
 }
 
 @Composable
-private fun QuantityStepper(quantity: Int, onQuantityChanged: (Int) -> Unit, unit: String) {
+private fun QuantityStepper(quantity: Double, onQuantityChanged: (Double) -> Unit, unit: String) {
     val colors = LocalColors.current
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onQuantityChanged((quantity - 1).coerceAtLeast(0)) }, modifier = Modifier.size(36.dp)) {
+        IconButton(onClick = { onQuantityChanged((quantity - 1).coerceAtLeast(0.0)) }, modifier = Modifier.size(36.dp)) {
             Icon(Icons.Outlined.Remove, "Уменьшить", tint = colors.primaryDark)
         }
-        Text("$quantity $unit", style = MaterialTheme.typography.titleMedium, color = colors.textPrimary)
+        Text("${quantity.formatQuantity()} $unit", style = MaterialTheme.typography.titleMedium, color = colors.textPrimary)
         IconButton(onClick = { onQuantityChanged(quantity + 1) }, modifier = Modifier.size(36.dp)) {
             Icon(Icons.Outlined.Add, "Увеличить", tint = colors.primaryDark)
         }
@@ -385,8 +389,8 @@ private fun ChangeCard(line: InventoryLine) {
                 }
                 Text("Арт. ${line.product.article}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                 Row(modifier = Modifier.padding(top = StoqSpacing.Medium)) {
-                    InventoryFact(Icons.Outlined.Inventory2, "Было", "${line.product.systemQuantity} ${line.product.unit}", Modifier.weight(1f))
-                    InventoryFact(Icons.Outlined.CheckCircle, "Стало", "${line.actualQuantity} ${line.product.unit}", Modifier.weight(1f))
+                    InventoryFact(Icons.Outlined.Inventory2, "Было", "${line.product.systemQuantity.formatQuantity()} ${line.product.unit}", Modifier.weight(1f))
+                    InventoryFact(Icons.Outlined.CheckCircle, "Стало", "${line.actualQuantity.formatQuantity()} ${line.product.unit}", Modifier.weight(1f))
                 }
             }
         }
@@ -531,7 +535,7 @@ private fun ReportLineCard(line: InventoryLine) {
             Icon(if (line.isDeleted) Icons.Outlined.DeleteOutline else Icons.Outlined.Refresh, null, tint = if (line.isDeleted) colors.error else colors.success)
             Column(modifier = Modifier.weight(1f).padding(start = StoqSpacing.Small)) {
                 Text(line.product.name, style = MaterialTheme.typography.titleMedium)
-                Text("${line.product.systemQuantity} ${line.product.unit} → ${line.actualQuantity} ${line.product.unit}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                Text("${line.product.systemQuantity.formatQuantity()} ${line.product.unit} → ${line.actualQuantity.formatQuantity()} ${line.product.unit}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
             }
             StoqStatusPill(if (line.isDeleted) "Удалено" else "Обновлено", if (line.isDeleted) StoqStatusTone.Error else StoqStatusTone.Success)
         }
@@ -555,21 +559,15 @@ private fun InventoryEmptyState(title: String = "Товары не найден�
 private fun InventoryLine.statusTitle() = when {
     !isChecked -> "К проверке"
     isDeleted -> "К удалению"
-    difference != 0 -> "Расхождение"
+    difference != 0.0 -> "Расхождение"
     else -> "Проверено"
 }
 
 private fun InventoryLine.statusTone() = when {
     !isChecked -> StoqStatusTone.Info
     isDeleted -> StoqStatusTone.Error
-    difference != 0 -> StoqStatusTone.Warning
+    difference != 0.0 -> StoqStatusTone.Warning
     else -> StoqStatusTone.Success
 }
 
-private fun imageResource(image: InventoryProductImage) = when (image) {
-    InventoryProductImage.Tomatoes -> R.drawable.product_tomatoes
-    InventoryProductImage.Mozzarella -> R.drawable.product_mozzarella
-    InventoryProductImage.Salmon -> R.drawable.product_salmon
-    InventoryProductImage.Iceberg -> R.drawable.product_iceberg
-    InventoryProductImage.Chicken -> R.drawable.product_chicken
-}
+private fun Double.formatQuantity() = if (this % 1.0 == 0.0) toLong().toString() else toString()
