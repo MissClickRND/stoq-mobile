@@ -30,6 +30,11 @@ class RemoteDishRepository @Inject constructor(
         apiCall = { api.createDish(request) },
         successHandler = { Unit }
     ).toUiState()
+
+    suspend fun deleteDish(id: Long): UiState<Unit> = safeApiCall(
+        apiCall = { api.deleteDish(id) },
+        successHandler = { Unit }
+    ).toUiState()
 }
 
 private fun DishDto.toDish() = Dish(

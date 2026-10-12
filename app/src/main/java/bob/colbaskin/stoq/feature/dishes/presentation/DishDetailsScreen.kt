@@ -40,21 +40,33 @@ import bob.colbaskin.stoq.feature.dishes.domain.model.IngredientStockStatus
 @Composable
 fun DishDetailsScreen(id: String, onBack: () -> Unit, viewModel: DishDetailsViewModel = hiltViewModel()) {
     LaunchedEffect(id) { viewModel.load(id) }
+    var confirmDeletion by remember { mutableStateOf(false) }
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()
         is UiState.Error -> ErrorScreen(title = state.title, text = state.text, onRetry = { viewModel.load(id) })
-        is UiState.Success -> DishDetailsContent(state.data, onBack)
+        is UiState.Success -> DishDetailsContent(state.data, onBack, onDelete = { confirmDeletion = true })
     }
+    if (confirmDeletion) {
+        AlertDialog(
+            onDismissRequest = { confirmDeletion = false },
+            title = { Text("Удалить блюдо?") },
+            text = { Text("Блюдо будет удалено из меню.") },
+            confirmButton = { TextButton(onClick = { viewModel.delete(id, onBack) }) { Text("Удалить") } },
+            dismissButton = { TextButton(onClick = { confirmDeletion = false }) { Text("Отмена") } }
+        )
+    }
+    if (viewModel.deleteState == UiState.Loading) LoadingScreen()
 }
 
 @Composable
-private fun DishDetailsContent(dish: Dish, onBack: () -> Unit) {
+private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onDelete: () -> Unit) {
     val colors = LocalColors.current
     LazyColumn(Modifier.fillMaxSize().background(colors.background), contentPadding = PaddingValues(start = StoqSpacing.ScreenHorizontal, top = 8.dp, end = StoqSpacing.ScreenHorizontal, bottom = StoqSpacing.ScreenHorizontal), verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)) {
         item {
             Row(Modifier.padding(vertical = StoqSpacing.Medium), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", Modifier.size(28.dp).clickable(onClick = onBack), tint = colors.textPrimary)
-                Spacer(Modifier.width(StoqSpacing.Medium)); Text("Блюда", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                Spacer(Modifier.width(StoqSpacing.Medium)); Text("Блюда", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                IconButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, "Удалить блюдо", tint = colors.error) }
             }
             StoqAsyncImage(dish.imageUrl, dish.name, Modifier.fillMaxWidth().height(235.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
         }
