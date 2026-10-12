@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -18,12 +19,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
-import coil.compose.AsyncImage
 import bob.colbaskin.stoq.R
-
-private const val DefaultAvatarUrl =
-    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=144&q=80"
 
 @Composable
 fun StoqTopBar(avatarUrl: String?, showAvatar: Boolean, onProfileClick: () -> Unit) {
@@ -47,13 +48,28 @@ fun StoqTopBar(avatarUrl: String?, showAvatar: Boolean, onProfileClick: () -> Un
             )
             Box(modifier = Modifier.weight(1f))
             if (showAvatar) {
-                AsyncImage(
-                    model = avatarUrl ?: DefaultAvatarUrl,
-                    contentDescription = "Профиль пользователя",
-                    modifier = Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onProfileClick),
-                    contentScale = ContentScale.Crop
-                )
+                if (avatarUrl.isNullOrBlank()) {
+                    AvatarPlaceholder(onProfileClick)
+                } else {
+                    StoqAsyncImage(
+                        imageUrl = avatarUrl,
+                        contentDescription = "Профиль пользователя",
+                        modifier = Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onProfileClick),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun AvatarPlaceholder(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(36.dp).clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Outlined.Person, contentDescription = "Профиль пользователя", tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
