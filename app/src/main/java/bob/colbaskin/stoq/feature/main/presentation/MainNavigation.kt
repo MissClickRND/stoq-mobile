@@ -98,12 +98,9 @@ fun MainNavigation(user: AuthUser?) {
                 items = mainSections,
                 selectedRoute = currentRoute,
                 onItemSelected = { section ->
-                    if (section.route == adminRoute) {
-                        navController.navigate(AdminDestination) {
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    } else if (section.route == SupplyRoute && navController.popBackStack(SupplyRoute, false)) {
+                    if (section.route == currentRoute) {
+                        Unit
+                    } else if (navController.popBackStack(section.route, false)) {
                         Unit
                     } else {
                         navController.navigate(section.route) {
