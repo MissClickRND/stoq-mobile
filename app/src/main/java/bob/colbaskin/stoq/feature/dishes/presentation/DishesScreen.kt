@@ -213,7 +213,7 @@ private fun DishIngredientEditor(
             OutlinedTextField(
                 value = selectedProduct?.name.orEmpty(),
                 onValueChange = {},
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                modifier = Modifier.menuAnchor().fillMaxWidth().height(72.dp),
                 label = { Text("Продукт") },
                 placeholder = { Text(if (products.isEmpty()) "Загрузка ингредиентов…" else "Выберите ингредиент") },
                 readOnly = true,
