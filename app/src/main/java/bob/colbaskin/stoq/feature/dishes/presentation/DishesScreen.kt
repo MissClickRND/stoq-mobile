@@ -98,7 +98,7 @@ fun DishesScreen(
         onDismiss = { showAddDialog = false },
         onSubmit = {
             if (newName.isNotBlank() && newDescription.isNotBlank() && newPrice.isNotBlank() && newIngredients.isNotBlank()) {
-                viewModel.addDish(newName)
+                viewModel.addDish(newName, newDescription, newPrice, newIngredients)
                 newName = ""; newDescription = ""; newPrice = ""; newIngredients = ""; addToStopList = false
                 showAddDialog = false
             }
@@ -139,7 +139,8 @@ private fun AddDishDialog(
                 StoqTextField(name, onNameChange, "Название блюда", isRequired = true)
                 StoqTextField(description, onDescriptionChange, "Описание", isRequired = true, singleLine = false, minLines = 3)
                 StoqTextField(price, onPriceChange, "Цена продажи, ₽", isRequired = true)
-                StoqTextField(ingredients, onIngredientsChange, "Ингредиенты", placeholder = "мог", isRequired = true)
+                StoqTextField(ingredients, onIngredientsChange, "Ингредиенты", placeholder = "Название товара: количество", isRequired = true)
+                Text("По одному ингредиенту в строке. Название должно совпадать с товаром на складе.", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                 Text("Себестоимость порции: мог", style = MaterialTheme.typography.titleMedium, color = colors.textSecondary)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = addToStopList, onCheckedChange = onStopListChange)

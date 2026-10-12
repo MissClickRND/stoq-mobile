@@ -7,7 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.feature.dishes.data.RemoteDishRepository
+import bob.colbaskin.stoq.feature.dishes.data.model.CreateDishDto
+import bob.colbaskin.stoq.feature.dishes.data.model.CreateDishIngredientDto
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
+import bob.colbaskin.stoq.feature.products.data.RemoteProductRepository
+import bob.colbaskin.stoq.feature.products.data.model.ProductDto
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,16 +34,22 @@ data class CollectionFilterState(
 
 @HiltViewModel
 class DishesViewModel @Inject constructor(
-    private val repository: RemoteDishRepository
+    private val repository: RemoteDishRepository,
+    private val productRepository: RemoteProductRepository
 ) : ViewModel() {
     var allDishes by mutableStateOf<List<Dish>>(emptyList())
         private set
     var state by mutableStateOf(DishesState())
         private set
+    var products by mutableStateOf<List<ProductDto>>(emptyList())
+        private set
     private var stopListFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Любая причина"))
     private var recommendationsFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Срочность"))
 
-    init { refresh() }
+    init {
+        refresh()
+        refreshProducts()
+    }
 
     fun refresh() = viewModelScope.launch {
         state = state.copy(loadState = UiState.Loading)
@@ -60,18 +70,42 @@ class DishesViewModel @Inject constructor(
         if (recommended) recommendationsFilterState = update(recommendationsFilterState)
         else stopListFilterState = update(stopListFilterState)
     }
-    fun addDish(name: String) = viewModelScope.launch {
-        if (name.isBlank()) return@launch
-        when (repository.createDish(name)) {
+    fun addDish(name: String, description: String, salePrice: String, ingredients: String) = viewModelScope.launch {
+        val parsedIngredients = ingredients.lines().mapNotNull { line ->
+            val match = ingredientPattern.matchEntire(line.trim()) ?: return@mapNotNull null
+            val productName = match.groupValues[1].trim()
+            val quantity = match.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return@mapNotNull null
+            products.firstOrNull { it.name.equals(productName, ignoreCase = true) }?.let { product ->
+                CreateDishIngredientDto(product.id, quantity)
+            }
+        }
+        if (name.isBlank() || description.isBlank() || salePrice.toDoubleOrNull() == null || parsedIngredients.isEmpty()) return@launch
+        when (repository.createDish(CreateDishDto(
+            name = name.trim(),
+            description = description.trim(),
+            salePrice = salePrice.toDouble(),
+            recipeItems = parsedIngredients
+        ))) {
             is UiState.Success -> refresh()
             is UiState.Error -> Unit
             UiState.Loading -> Unit
         }
     }
 
+    private fun refreshProducts() = viewModelScope.launch {
+        when (val result = productRepository.getProducts()) {
+            is UiState.Success -> products = result.data
+            else -> Unit
+        }
+    }
+
     private fun DishesState.filtered(source: List<Dish> = allDishes) = source.filter { dish ->
         (category == "Все" || if (category == "В стоп-листе") !dish.active else dish.category == category) &&
             (query.isBlank() || dish.name.contains(query, ignoreCase = true) || dish.description.orEmpty().contains(query, ignoreCase = true))
+    }
+
+    private companion object {
+        val ingredientPattern = Regex("^(.+?)\\s*[:;]\\s*(\\d+(?:[,.]\\d+)?)$")
     }
 }
 

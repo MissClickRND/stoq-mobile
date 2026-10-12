@@ -8,9 +8,9 @@ data class DishDto(
     val name: String,
     val description: String = "мог",
     val imageURL: String? = null,
-    val salePrice: Int? = null,
+    val salePrice: Double? = null,
     val isDeleted: Boolean = false,
-    val recipeItems: List<RecipeItemDto> = emptyList()
+    val recipeItems: List<DishIngredientDto> = emptyList()
 )
 
 @Serializable
@@ -25,22 +25,23 @@ data class RecipeProductDto(
 )
 
 @Serializable
-data class RecipeItemDto(
+data class DishIngredientDto(
     val productId: Long,
     val quantity: Double,
     val product: RecipeProductDto? = null
 )
 
 @Serializable
-data class RecipeDto(
-    val id: Long,
+data class CreateDishDto(
     val name: String,
-    val description: String = "мог",
+    val description: String,
     val imageURL: String? = null,
-    val salePrice: Int? = null,
-    val isDeleted: Boolean = false,
-    val recipeItems: List<RecipeItemDto> = emptyList()
+    val salePrice: Double,
+    val recipeItems: List<CreateDishIngredientDto>
 )
 
 @Serializable
-data class CreateDishDto(val name: String)
+data class CreateDishIngredientDto(
+    val productId: Long,
+    val quantity: Double
+)
