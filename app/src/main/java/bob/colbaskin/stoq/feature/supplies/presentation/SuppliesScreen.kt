@@ -37,6 +37,8 @@ import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -62,7 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
-import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
@@ -89,7 +91,6 @@ fun SuppliesScreen(
     onDraftFeedbackShown: () -> Unit = {},
     viewModel: SuppliesViewModel = hiltViewModel()
 ) {
-    RefreshOnResume(viewModel::refresh)
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf<SupplyStatus?>(null) }
     val supplies = (viewModel.state as? UiState.Success)?.data.orEmpty()
@@ -99,11 +100,13 @@ fun SuppliesScreen(
                 listOf(supply.number, supply.items.joinToString { it.productName }).any { it.contains(query, true) }
         }
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    PullToRefreshContainer(viewModel.isRefreshing, viewModel::refresh, Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         item {
             Text("Поставки", style = MaterialTheme.typography.headlineMedium)
             Text("Входящие поставки от поставщиков и контроль приёмки товаров", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -115,9 +118,6 @@ fun SuppliesScreen(
             UpdBanner()
         }
         item { DraftsBanner(viewModel.drafts.size, "поставка", onDraftsClick) }
-        item {
-            StoqPrimaryButton(text = "Создать поставку", onClick = onCreateSupply)
-        }
         item { StorageMetrics(supplies) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -127,7 +127,16 @@ fun SuppliesScreen(
                 StorageFilter("Есть расхождения", "мог", Icons.Outlined.WarningAmber, filter == SupplyStatus.Mismatch, { filter = SupplyStatus.Mismatch })
             }
         }
-        items(visible, key = { it.id }) { supply -> SupplyCard(supply) { onSupplyClick(supply.id.toString()) } }
+            items(visible, key = { it.id }) { supply -> SupplyCard(supply) { onSupplyClick(supply.id.toString()) } }
+        }
+        FloatingActionButton(
+            onClick = onCreateSupply,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
+            containerColor = CustomTheme.colors.primary,
+            contentColor = CustomTheme.colors.textOnPrimary,
+            shape = CircleShape
+        ) { Icon(Icons.Outlined.Add, "Создать поставку") }
+    }
     }
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()
@@ -163,7 +172,7 @@ private fun StorageMetrics(supplies: List<SupplyData>) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Metric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "мог", Icons.Outlined.CheckCircle, Modifier.weight(1f))
-            Metric("Сумма поставок", "мог", "мог", Icons.Outlined.Inventory2, Modifier.weight(1f))
+            Metric("Сумма поставок", supplies.sumOf { it.totalPrice ?: 0.0 }.takeIf { it > 0 }?.toRubles() ?: "мог", "мог", Icons.Outlined.Inventory2, Modifier.weight(1f))
         }
     }
 }
@@ -218,7 +227,7 @@ private fun SupplyCard(supply: SupplyData, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(supply.number, style = MaterialTheme.typography.titleMedium)
-                        Text("мог", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text(supply.supplier ?: "мог", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                         Text("мог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     StatusPill(status)
@@ -232,8 +241,8 @@ private fun SupplyCard(supply: SupplyData, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.PersonOutline, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Text("мог", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    Text("мог", style = MaterialTheme.typography.titleMedium)
+                    Text(supply.supplier ?: "мог", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Text(supply.totalPrice?.toRubles() ?: "мог", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
@@ -356,7 +365,7 @@ fun CreateSupplyScreen(
                     viewModel.products.filter { it.name.contains(search, true) }.forEach { candidate ->
                         Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable {
                             if (products.none { it.productId == candidate.id }) {
-                                products = listOf(SupplyProduct(candidate.id, candidate.name, "мог", "1", "мог", "мог", date.toIsoDateTime())) + products
+                                products = listOf(SupplyProduct(candidate.id, candidate.name, "мог", "1", "0", "мог", date.toIsoDateTime())) + products
                                 hasUnsavedChanges = true
                             }
                             search = ""
@@ -370,7 +379,7 @@ fun CreateSupplyScreen(
                 StoqPrimaryButton("Добавить продукт", { search = " " })
             }
         }
-        item { SupplyTotal(products.size) }
+        item { SupplyTotal(products) }
         items(products, key = { it.productId }) { product ->
             SupplyProductCard(product, { products = products.filterNot { it == product }; hasUnsavedChanges = true }, { updated -> products = products.map { if (it == product) updated else it }; hasUnsavedChanges = true })
         }
@@ -380,12 +389,14 @@ fun CreateSupplyScreen(
                     Surface(modifier = Modifier.weight(1f).height(52.dp).clip(MaterialTheme.shapes.medium).clickable(enabled = currentDraft.hasContent) { viewModel.saveDraft(currentDraft, onSaved = { hasUnsavedChanges = false; onSuppliesClick() }, showMessage = false) }, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Box(contentAlignment = Alignment.Center) { Text("Сохранить", style = MaterialTheme.typography.labelLarge) } }
                     StoqPrimaryButton("На приёмку", {
                         val items = products.mapNotNull { product ->
-                            product.quantity.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }?.let { quantity ->
-                                CreateSupplyItemDto(product.productId, quantity, product.expires.toIsoDateTime())
-                            }
+                            val quantity = product.quantity.replace(',', '.').toDoubleOrNull()
+                            val price = product.price.replace(',', '.').toDoubleOrNull()
+                            if (quantity != null && quantity > 0 && price != null && price >= 0) {
+                                CreateSupplyItemDto(product.productId, quantity, quantity * price, product.expires.toIsoDateTime())
+                            } else null
                         }
-                        if (name.isNotBlank() && items.isNotEmpty()) {
-                            viewModel.create(CreateSupplyDto(name.trim(), items, date.toIsoDateTime()), currentDraft, onBack)
+                        if (name.isNotBlank() && supplier.isNotBlank() && items.isNotEmpty()) {
+                            viewModel.create(CreateSupplyDto(name.trim(), supplier.trim(), items, date.toIsoDateTime()), currentDraft, onBack)
                         }
                     }, Modifier.weight(1.3f))
                 }
@@ -405,8 +416,12 @@ fun CreateSupplyScreen(
 }
 
 @Composable
-private fun SupplyTotal(count: Int) {
-    Surface(color = CustomTheme.colors.primary.copy(alpha = .12f), shape = MaterialTheme.shapes.medium) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .2f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Inventory2, null, tint = CustomTheme.colors.success) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("Всего позиций", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("$count", style = MaterialTheme.typography.titleLarge) }; Box(Modifier.width(1.dp).height(42.dp).background(MaterialTheme.colorScheme.outline)); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1.5f)) { Text("Общая сумма поставки", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("мог", style = MaterialTheme.typography.titleLarge) } } }
+private fun SupplyTotal(products: List<SupplyProduct>) {
+    val total = products.sumOf { product ->
+        (product.quantity.replace(',', '.').toDoubleOrNull() ?: 0.0) *
+            (product.price.replace(',', '.').toDoubleOrNull() ?: 0.0)
+    }
+    Surface(color = CustomTheme.colors.primary.copy(alpha = .12f), shape = MaterialTheme.shapes.medium) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(44.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .2f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Inventory2, null, tint = CustomTheme.colors.success) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("Всего позиций", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${products.size}", style = MaterialTheme.typography.titleLarge) }; Box(Modifier.width(1.dp).height(42.dp).background(MaterialTheme.colorScheme.outline)); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1.5f)) { Text("Общая сумма поставки", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(total.toRubles(), style = MaterialTheme.typography.titleLarge) } } }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -418,13 +433,14 @@ private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUp
     var batch by remember(product.productId) { mutableStateOf(product.batch) }
     var expires by remember(product.productId) { mutableStateOf(product.expires) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
     StoqCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Top) {
             Box(Modifier.size(72.dp).clip(MaterialTheme.shapes.small).background(CustomTheme.colors.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Inventory2, null, modifier = Modifier.size(32.dp), tint = CustomTheme.colors.success) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Row { Column(Modifier.weight(1f)) { Text(product.name, style = MaterialTheme.typography.titleMedium); Text(product.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Surface(shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Icon(if (editing) Icons.Outlined.Check else Icons.Outlined.Edit, if (editing) "Подтвердить" else "Редактировать", modifier = Modifier.clickable { if (editing) onUpdate(product.copy(quantity = quantity, price = price, batch = batch, expires = expires)); editing = !editing }.padding(9.dp), tint = CustomTheme.colors.primaryDark) }; Spacer(Modifier.width(8.dp)); Surface(shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, CustomTheme.colors.error.copy(alpha = .5f))) { Icon(Icons.Outlined.DeleteOutline, "Удалить", modifier = Modifier.clickable(onClick = onDelete).padding(9.dp), tint = CustomTheme.colors.error) } }
+                Row { Column(Modifier.weight(1f)) { Text(product.name, style = MaterialTheme.typography.titleMedium); Text(product.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Surface(shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Icon(if (editing) Icons.Outlined.Check else Icons.Outlined.Edit, if (editing) "Подтвердить" else "Редактировать", modifier = Modifier.clickable { if (editing) onUpdate(product.copy(quantity = quantity, price = price, batch = batch, expires = expires)); editing = !editing }.padding(9.dp), tint = CustomTheme.colors.primaryDark) }; Spacer(Modifier.width(8.dp)); Surface(shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, CustomTheme.colors.error.copy(alpha = .5f))) { Icon(Icons.Outlined.DeleteOutline, "Удалить", modifier = Modifier.clickable { showDeleteDialog = true }.padding(9.dp), tint = CustomTheme.colors.error) } }
                 Spacer(Modifier.height(8.dp))
                 if (editing) { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { CompactTextField(quantity, { quantity = it; onUpdate(product.copy(quantity = it, price = price, batch = batch, expires = expires)) }, "Количество", Modifier.weight(.7f)); CompactTextField(price, { price = it; onUpdate(product.copy(quantity = quantity, price = it, batch = batch, expires = expires)) }, "Цена", Modifier.weight(.7f)); CompactTextField(batch, { batch = it; onUpdate(product.copy(quantity = quantity, price = price, batch = it, expires = expires)) }, "Партия", Modifier.weight(1.2f)) }; Spacer(Modifier.height(6.dp)); Surface(modifier = Modifier.fillMaxWidth().height(48.dp).clip(MaterialTheme.shapes.small).clickable { showDatePicker = true }, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Text(expires, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); Icon(Icons.Outlined.CalendarToday, null, modifier = Modifier.size(18.dp)) } } } else { ProductDetailsRow(quantity, batch, expires) }
                 Spacer(Modifier.height(8.dp))
@@ -433,6 +449,13 @@ private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUp
         }
     }
     if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { selected -> expires = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(selected)); onUpdate(product.copy(quantity = quantity, price = price, batch = batch, expires = expires)) }; showDatePicker = false }) { Text("Выбрать") } }) { DatePicker(datePickerState) }
+    if (showDeleteDialog) AlertDialog(
+        onDismissRequest = { showDeleteDialog = false },
+        title = { Text("Удалить товар из поставки?") },
+        text = { Text("${product.name} будет удалён из текущей поставки.") },
+        confirmButton = { TextButton(onClick = { showDeleteDialog = false; onDelete() }) { Text("Удалить", color = CustomTheme.colors.error) } },
+        dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text("Отмена") } }
+    )
 }
 
 @Composable
@@ -468,6 +491,7 @@ private fun ProductPriceSummary(price: String, quantity: String) {
 }
 
 private fun formatRubles(value: Int): String = String.format(java.util.Locale("ru"), "%,d", value).replace(',', ' ')
+private fun Double.toRubles(): String = "${formatRubles(toInt())} ₽"
 
 private fun String.toIsoDateTime(): String {
     val parts = trim().removePrefix("Годен до: ").split('.')

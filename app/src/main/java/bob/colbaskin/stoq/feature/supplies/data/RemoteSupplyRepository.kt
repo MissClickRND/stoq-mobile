@@ -18,6 +18,8 @@ data class Supply(
     val status: String,
     val receivedAt: String?,
     val createdAt: String?,
+    val supplier: String?,
+    val totalPrice: Double?,
     val items: List<SupplyItem>
 )
 
@@ -27,6 +29,8 @@ data class SupplyItem(
     val productName: String,
     val unit: String,
     val quantity: Double,
+    val price: Double?,
+    val totalPrice: Double?,
     val expiresAt: String?
 )
 
@@ -76,6 +80,8 @@ private fun SupplyDto.toSupply(
     status = status.orEmpty(),
     receivedAt = receivedAt,
     createdAt = createdAt,
+    supplier = supplier,
+    totalPrice = totalPrice?.jsonPrimitive?.content?.toDoubleOrNull(),
     items = listItems ?: items.map { it.toSupplyItem(products) }
 )
 
@@ -91,6 +97,8 @@ private fun SupplyDto.toListItem(
         productName = responseProduct.name ?: fallback?.name ?: "Товар #$productId",
         unit = responseProduct.unit?.shortName ?: fallback?.unit?.shortName.orEmpty(),
         quantity = 0.0,
+        price = null,
+        totalPrice = null,
         expiresAt = null
     )
 }
@@ -106,6 +114,8 @@ private fun SupplyItemDto.toSupplyItem(
         productName = product?.name ?: fallback?.name ?: "Товар #$resolvedProductId",
         unit = product?.unit?.shortName ?: fallback?.unit?.shortName.orEmpty(),
         quantity = quantity?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0,
+        price = price?.jsonPrimitive?.content?.toDoubleOrNull(),
+        totalPrice = totalPrice?.jsonPrimitive?.content?.toDoubleOrNull(),
         expiresAt = expiresAt
     )
 }

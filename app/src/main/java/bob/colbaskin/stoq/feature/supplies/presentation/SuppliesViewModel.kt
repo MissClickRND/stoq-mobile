@@ -30,6 +30,9 @@ class SuppliesViewModel @Inject constructor(
 ) : ViewModel() {
     var state by mutableStateOf<UiState<List<Supply>>>(UiState.Loading)
         private set
+    private var cachedSupplies = emptyList<Supply>()
+    var isRefreshing by mutableStateOf(false)
+        private set
 
     init { refresh() }
 
@@ -40,7 +43,19 @@ class SuppliesViewModel @Inject constructor(
         viewModelScope.launch { draftsRepository.observe(DraftType.Supply).collect { drafts = it } }
     }
 
-    fun refresh() = viewModelScope.launch { state = repository.getSupplies() }
+    fun refresh() = viewModelScope.launch {
+        val hasData = state is UiState.Success
+        if (hasData) isRefreshing = true else state = UiState.Loading
+        when (val result = repository.getSupplies()) {
+            is UiState.Success -> {
+                cachedSupplies = result.data
+                state = result
+            }
+            is UiState.Error -> state = if (hasData) UiState.Success(cachedSupplies) else result
+            UiState.Loading -> Unit
+        }
+        isRefreshing = false
+    }
 }
 
 @HiltViewModel

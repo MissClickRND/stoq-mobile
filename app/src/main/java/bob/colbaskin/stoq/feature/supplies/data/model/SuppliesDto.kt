@@ -7,6 +7,8 @@ import kotlinx.serialization.json.JsonElement
 data class SupplyDto(
     val id: Long,
     val supplyNumber: String,
+    val supplier: String? = null,
+    val totalPrice: JsonElement? = null,
     val status: String? = null,
     val receivedAt: String? = null,
     val createdAt: String? = null,
@@ -33,6 +35,8 @@ data class SupplyItemDto(
     val supplyId: Long? = null,
     val productId: Long? = null,
     val quantity: JsonElement? = null,
+    val price: JsonElement? = null,
+    val totalPrice: JsonElement? = null,
     val expiresAt: String? = null,
     val createdAt: String? = null,
     val product: SupplyProductDto? = null
@@ -41,6 +45,7 @@ data class SupplyItemDto(
 @Serializable
 data class CreateSupplyDto(
     val supplyNumber: String,
+    val supplier: String,
     val items: List<CreateSupplyItemDto>,
     val receivedAt: String? = null
 )
@@ -49,5 +54,6 @@ data class CreateSupplyDto(
 data class CreateSupplyItemDto(
     val productId: Long,
     val quantity: Double,
+    val totalPrice: Double,
     val expiresAt: String
 )
