@@ -1,5 +1,8 @@
 package bob.colbaskin.stoq.feature.orders.presentation
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import bob.colbaskin.stoq.common.core.UiState
@@ -18,10 +21,16 @@ class OrderDetailsViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow<UiState<Order>>(UiState.Loading)
     val state = _state.asStateFlow()
+    var isRefreshing by mutableStateOf(false)
+        private set
 
     fun load(id: String) = viewModelScope.launch {
-        _state.update { UiState.Loading }
-        _state.update { repository.order(id) }
+        val previous = _state.value
+        val hasData = previous is UiState.Success
+        if (hasData) isRefreshing = true else _state.update { UiState.Loading }
+        val result = repository.order(id)
+        _state.update { if (hasData && result is UiState.Error) previous else result }
+        isRefreshing = false
     }
 
     fun delete(id: String, onDeleted: () -> Unit) = viewModelScope.launch {

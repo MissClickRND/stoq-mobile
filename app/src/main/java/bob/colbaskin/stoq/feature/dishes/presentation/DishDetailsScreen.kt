@@ -31,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
@@ -49,7 +50,13 @@ fun DishDetailsScreen(
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()
         is UiState.Error -> ErrorScreen(title = state.title, text = state.text, onRetry = { viewModel.load(id) }, onBack = onBack)
-        is UiState.Success -> DishDetailsContent(state.data, onBack, onStorageClick, onDelete = { confirmDeletion = true })
+        is UiState.Success -> PullToRefreshContainer(
+            isRefreshing = viewModel.isRefreshing,
+            onRefresh = { viewModel.load(id) },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            DishDetailsContent(state.data, onBack, onStorageClick, onDelete = { confirmDeletion = true })
+        }
     }
     if (confirmDeletion) {
         AlertDialog(

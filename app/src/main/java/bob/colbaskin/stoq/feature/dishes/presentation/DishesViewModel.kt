@@ -53,6 +53,8 @@ class DishesViewModel @Inject constructor(
         private set
     var stopListState by mutableStateOf<UiState<List<StopListDish>>>(UiState.Loading)
         private set
+    var isStopListRefreshing by mutableStateOf(false)
+        private set
     private var stopList = emptyList<StopListDish>()
     private var stopListFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Любая причина"))
     private var recommendationsFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Срочность"))
@@ -103,16 +105,22 @@ class DishesViewModel @Inject constructor(
     }
 
     fun loadStopList() = viewModelScope.launch {
-        stopListState = UiState.Loading
+        val hasData = stopListState is UiState.Success
+        if (hasData) isStopListRefreshing = true else stopListState = UiState.Loading
         when (val result = recommendationsRepository.getStopList()) {
             is UiState.Success -> {
                 stopList = result.data
                 rebuildStopListDishes()
                 stopListState = result
             }
-            is UiState.Error -> stopListState = result
+            is UiState.Error -> if (!hasData) stopListState = result
             UiState.Loading -> Unit
         }
+        isStopListRefreshing = false
+    }
+
+    fun refreshCollection(recommended: Boolean) {
+        if (recommended) refresh() else loadStopList()
     }
 
     fun stopListReason(dishId: String): String = stopList.firstOrNull { it.dishId == dishId }?.reason ?: "мог"
@@ -168,11 +176,20 @@ class DishDetailsViewModel @Inject constructor(
         private set
     var deleteState by mutableStateOf<UiState<Unit>?>(null)
         private set
+    var isRefreshing by mutableStateOf(false)
+        private set
 
     fun load(id: String) = viewModelScope.launch {
         val numericId = id.toLongOrNull()
-        state = if (numericId == null) UiState.Error("Некорректный идентификатор", "Блюдо не удалось загрузить.") else UiState.Loading
-        if (numericId != null) state = repository.getDish(numericId)
+        val previous = state
+        val hasData = previous is UiState.Success
+        if (hasData) isRefreshing = true
+        else state = if (numericId == null) UiState.Error("Некорректный идентификатор", "Блюдо не удалось загрузить.") else UiState.Loading
+        if (numericId != null) {
+            val result = repository.getDish(numericId)
+            state = if (hasData && result is UiState.Error) previous else result
+        }
+        isRefreshing = false
     }
 
     fun delete(id: String, onSuccess: () -> Unit) = viewModelScope.launch {

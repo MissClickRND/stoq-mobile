@@ -64,10 +64,17 @@ class SupplyDetailsViewModel @Inject constructor(
 ) : ViewModel() {
     var state by mutableStateOf<UiState<Supply>>(UiState.Loading)
         private set
+    var isRefreshing by mutableStateOf(false)
+        private set
 
     fun load(id: String) = viewModelScope.launch {
-        state = id.toLongOrNull()?.let { repository.getSupply(it) }
+        val previous = state
+        val hasData = previous is UiState.Success
+        if (hasData) isRefreshing = true else state = UiState.Loading
+        val result = id.toLongOrNull()?.let { repository.getSupply(it) }
             ?: UiState.Error("Некорректный идентификатор", "Поставка не найдена.")
+        state = if (hasData && result is UiState.Error) previous else result
+        isRefreshing = false
     }
 }
 

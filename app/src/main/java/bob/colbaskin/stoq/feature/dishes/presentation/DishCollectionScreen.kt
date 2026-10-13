@@ -29,6 +29,7 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +65,11 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
     } else dishes
     val title = if (recommended) "Рекомендуемые блюда" else "Стоп-лист блюд"
     val subtitle = if (recommended) "Эти блюда рекомендуется продать в первую очередь на основе текущих остатков, сроков годности и маржи." else "Блюда, которые в настоящий момент нельзя заказать из-за отсутствия ингредиентов или истечения срока годности продуктов."
+    PullToRefreshContainer(
+        isRefreshing = if (recommended) viewModel.state.isRefreshing else viewModel.isStopListRefreshing,
+        onRefresh = { viewModel.refreshCollection(recommended) },
+        modifier = Modifier.fillMaxSize()
+    ) {
     LazyColumn(Modifier.fillMaxSize().background(colors.background), contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", Modifier.size(30.dp).clickable(onClick = onBack).padding(3.dp), tint = colors.textPrimary); Spacer(Modifier.width(6.dp)); Text(title, style = MaterialTheme.typography.headlineMedium) }; Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary) }
         item { CollectionSearch(filters.query) { viewModel.updateCollectionFilters(recommended) { current -> current.copy(query = it) } } }
@@ -87,6 +93,7 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
         items(sortedDishes, key = Dish::id) { dish ->
             CollectionDishCard(dish, recommended, viewModel.stopListReasonTitle(dish.id), viewModel.stopListReason(dish.id)) { onDishClick(dish.id) }
         }
+    }
     }
     if (!recommended) {
         when (val state = viewModel.stopListState) {

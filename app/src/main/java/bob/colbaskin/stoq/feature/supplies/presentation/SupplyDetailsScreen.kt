@@ -55,6 +55,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
@@ -113,6 +114,11 @@ fun SupplyDetailsScreen(
         }
     }
 
+    PullToRefreshContainer(
+        isRefreshing = viewModel.isRefreshing,
+        onRefresh = { viewModel.load(supplyNumber) },
+        modifier = Modifier.fillMaxSize()
+    ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(colors.background),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = StoqSpacing.Medium),
@@ -140,6 +146,7 @@ fun SupplyDetailsScreen(
         } else {
             items(visibleProducts, key = { it.sku }) { product -> SupplyDetailProductCard(product) }
         }
+    }
     }
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()

@@ -74,6 +74,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
@@ -109,6 +110,11 @@ fun InventoryScreen(
     }
     BackHandler(enabled = hasChanges) { showExitDialog = true }
 
+    PullToRefreshContainer(
+        isRefreshing = state.isRefreshing,
+        onRefresh = viewModel::refreshForPull,
+        modifier = Modifier.fillMaxSize()
+    ) {
     Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -134,6 +140,7 @@ fun InventoryScreen(
         is UiState.Success -> Unit
     }
     if (state.isApplying) LoadingScreen()
+    }
     }
     UnsavedChangesDialog(
         visible = showExitDialog,

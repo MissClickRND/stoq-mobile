@@ -47,7 +47,8 @@ data class InventoryState(
     val notice: String? = null,
     val hasUnsavedChanges: Boolean = false,
     val loadingState: UiState<Unit> = UiState.Loading,
-    val isApplying: Boolean = false
+    val isApplying: Boolean = false,
+    val isRefreshing: Boolean = false
 ) {
     val changedLines: List<InventoryLine>
         get() = lines.filter { it.difference != 0.0 }
@@ -110,6 +111,14 @@ class InventoryViewModel @Inject constructor(
 
     fun load() = refresh()
     fun onRetry() = refresh()
+
+    fun refreshForPull() {
+        if (_state.value.hasDraftableProgress) {
+            _state.update { it.copy(notice = "Сохраните или завершите инвентаризацию перед обновлением данных") }
+        } else {
+            refresh()
+        }
+    }
 
     fun onAction(action: InventoryAction) = viewModelScope.launch {
         when (action) {
@@ -208,10 +217,16 @@ class InventoryViewModel @Inject constructor(
     private fun refresh() = viewModelScope.launch {
         draftWriteVersion++
         draftId = null
-        _state.value = InventoryState(loadingState = UiState.Loading)
+        val previous = _state.value
+        val hasData = previous.lines.isNotEmpty()
+        if (hasData) _state.update { it.copy(isRefreshing = true) }
+        else _state.value = InventoryState(loadingState = UiState.Loading)
         when (val result = repository.products()) {
             is UiState.Success -> _state.value = InventoryState(lines = result.data.map(::InventoryLine), loadingState = UiState.Success(Unit))
-            is UiState.Error -> _state.value = InventoryState(loadingState = result)
+            is UiState.Error -> {
+                if (hasData) _state.update { it.copy(isRefreshing = false, notice = "${result.title}: ${result.text}") }
+                else _state.value = InventoryState(loadingState = result)
+            }
             UiState.Loading -> Unit
         }
     }
