@@ -24,9 +24,9 @@ data class StorageProduct(
 class RemoteInventoryRepository @Inject constructor(
     private val api: InventoryApiService
 ) {
-    suspend fun getInventory(): UiState<List<StorageProduct>> = safeApiCall(
+    suspend fun getInventory(search: String? = null): UiState<List<StorageProduct>> = safeApiCall(
         apiCall = {
-            api.getInventory().mapNotNull(InventoryDto::toStorageProduct)
+            api.getInventory(search?.trim()?.takeIf(String::isNotEmpty)).mapNotNull(InventoryDto::toStorageProduct)
         },
         successHandler = { it }
     ).toUiState()

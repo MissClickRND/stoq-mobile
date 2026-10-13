@@ -6,6 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.drafts.data.Draft
+import bob.colbaskin.stoq.common.drafts.data.DraftRepository
+import bob.colbaskin.stoq.common.drafts.data.DraftType
 import bob.colbaskin.stoq.feature.products.data.RemoteInventoryRepository
 import bob.colbaskin.stoq.feature.products.data.RemoteProductRepository
 import bob.colbaskin.stoq.feature.products.data.StorageProduct
@@ -13,13 +16,16 @@ import bob.colbaskin.stoq.feature.products.data.model.CreateProductDto
 import bob.colbaskin.stoq.feature.products.data.model.CreateUnitDto
 import bob.colbaskin.stoq.feature.products.data.model.ProductUnitDto
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class StorageViewModel @Inject constructor(
     private val repository: RemoteInventoryRepository,
-    private val productRepository: RemoteProductRepository
+    private val productRepository: RemoteProductRepository,
+    private val draftsRepository: DraftRepository
 ) : ViewModel() {
     var state by mutableStateOf<UiState<List<StorageProduct>>>(UiState.Loading)
         private set
@@ -27,15 +33,44 @@ class StorageViewModel @Inject constructor(
         private set
     var actionState by mutableStateOf<UiState<Unit>?>(null)
         private set
+    private var allProducts = emptyList<StorageProduct>()
+    private var searchJob: Job? = null
+    var inventoryDrafts by mutableStateOf<List<Draft>>(emptyList())
+        private set
 
     init {
         refresh()
         refreshUnits()
+        viewModelScope.launch {
+            draftsRepository.observe(DraftType.Inventory).collect { inventoryDrafts = it }
+        }
     }
 
     fun refresh() = viewModelScope.launch {
         state = UiState.Loading
-        state = repository.getInventory()
+        when (val result = repository.getInventory()) {
+            is UiState.Success -> {
+                allProducts = result.data
+                state = result
+            }
+            is UiState.Error -> state = result
+            UiState.Loading -> Unit
+        }
+    }
+
+    fun searchProducts(query: String) {
+        if (query.isBlank() && allProducts.isNotEmpty()) state = UiState.Success(allProducts)
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(250)
+            when (val result = repository.getInventory(query)) {
+                is UiState.Success -> {
+                    if (query.isBlank()) allProducts = result.data
+                    state = result
+                }
+                else -> Unit
+            }
+        }
     }
 
     fun createProduct(name: String, unitId: Long, onSuccess: () -> Unit) = viewModelScope.launch {

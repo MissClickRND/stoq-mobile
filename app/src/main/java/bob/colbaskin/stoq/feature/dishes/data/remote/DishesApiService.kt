@@ -7,10 +7,11 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.POST
+import retrofit2.http.Query
 
 interface DishesApiService {
     @GET("dishes")
-    suspend fun getDishes(): List<DishDto>
+    suspend fun getDishes(@Query("search") search: String? = null): List<DishDto>
 
     @GET("dishes/{id}")
     suspend fun getDish(@Path("id") dishId: Long): DishDto
