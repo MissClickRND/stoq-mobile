@@ -30,6 +30,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -117,6 +121,7 @@ fun DraftsListScreen(
     onOpen: (Draft) -> Unit,
     onDelete: (Draft) -> Unit
 ) {
+    var draftToDelete by remember { mutableStateOf<Draft?>(null) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
@@ -140,11 +145,20 @@ fun DraftsListScreen(
                         if (draft.summary.isNotBlank()) Text(draft.summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("Изменён ${formatDraftTime(draft.updatedAtEpochMillis)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Icon(Icons.Outlined.DeleteOutline, "Удалить черновик", Modifier.size(38.dp).clip(CircleShape).clickable { onDelete(draft) }.padding(8.dp), tint = CustomTheme.colors.error)
+                    Icon(Icons.Outlined.DeleteOutline, "Удалить черновик", Modifier.size(38.dp).clip(CircleShape).clickable { draftToDelete = draft }.padding(8.dp), tint = CustomTheme.colors.error)
                 }
             }
         }
         item { Spacer(Modifier.height(12.dp)) }
+    }
+    draftToDelete?.let { draft ->
+        AlertDialog(
+            onDismissRequest = { draftToDelete = null },
+            title = { Text("Удалить черновик?") },
+            text = { Text("Черновик «${draft.title}» будет удалён без возможности восстановления.") },
+            confirmButton = { Button(onClick = { onDelete(draft); draftToDelete = null }) { Text("Удалить") } },
+            dismissButton = { OutlinedButton(onClick = { draftToDelete = null }) { Text("Отмена") } }
+        )
     }
 }
 

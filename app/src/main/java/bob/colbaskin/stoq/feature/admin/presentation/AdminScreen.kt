@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -302,13 +303,14 @@ private fun EmployeeCard(
     onRoleChanged: (EmployeeRole) -> Unit,
     onDelete: () -> Unit
 ) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
     StoqCard {
         Row(verticalAlignment = Alignment.Top) {
             Avatar(employee.initials)
             Column(modifier = Modifier.weight(1f).padding(start = StoqSpacing.Medium)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(employee.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Outlined.DeleteOutline, "Удалить сотрудника", tint = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -329,6 +331,15 @@ private fun EmployeeCard(
                 )
             }
         }
+    }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Удалить сотрудника?") },
+            text = { Text("${employee.name} потеряет доступ к заведению. Восстановить запись автоматически не получится.") },
+            confirmButton = { Button(onClick = { showDeleteDialog = false; onDelete() }) { Text("Удалить") } },
+            dismissButton = { OutlinedButton(onClick = { showDeleteDialog = false }) { Text("Отмена") } }
+        )
     }
 }
 
@@ -449,6 +460,8 @@ private fun InvitationCard(
 ) {
     val clipboard = LocalClipboardManager.current
     val colors = LocalColors.current
+    var showDeactivateDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     StoqCard {
         Row(verticalAlignment = Alignment.Top) {
             Surface(
@@ -493,12 +506,12 @@ private fun InvitationCard(
                 Text("Копировать", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
             }
             if (invitation.status == InvitationStatus.Active) {
-                OutlinedButton(onClick = onDeactivate, modifier = Modifier.height(44.dp)) {
+                OutlinedButton(onClick = { showDeactivateDialog = true }, modifier = Modifier.height(44.dp)) {
                     Icon(Icons.Outlined.Block, "Отключить приглашение", modifier = Modifier.size(18.dp))
                 }
             }
             Button(
-                onClick = onDelete,
+                onClick = { showDeleteDialog = true },
                 modifier = Modifier.height(44.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.error.copy(alpha = 0.12f),
@@ -508,6 +521,24 @@ private fun InvitationCard(
                 Icon(Icons.Outlined.DeleteOutline, "Удалить приглашение", modifier = Modifier.size(18.dp))
             }
         }
+    }
+    if (showDeactivateDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeactivateDialog = false },
+            title = { Text("Отключить приглашение?") },
+            text = { Text("Ссылка перестанет работать, и сотрудник не сможет присоединиться по ней.") },
+            confirmButton = { Button(onClick = { showDeactivateDialog = false; onDeactivate() }) { Text("Отключить") } },
+            dismissButton = { OutlinedButton(onClick = { showDeactivateDialog = false }) { Text("Отмена") } }
+        )
+    }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Удалить приглашение?") },
+            text = { Text("Приглашение будет удалено без возможности восстановления.") },
+            confirmButton = { Button(onClick = { showDeleteDialog = false; onDelete() }) { Text("Удалить") } },
+            dismissButton = { OutlinedButton(onClick = { showDeleteDialog = false }) { Text("Отмена") } }
+        )
     }
 }
 

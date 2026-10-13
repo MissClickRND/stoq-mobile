@@ -68,7 +68,11 @@ private val DashboardYellow = Color(0xFFFFBE35)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(
+    onProductsClick: () -> Unit,
+    onDishesClick: () -> Unit,
+    onOrdersClick: () -> Unit
+) {
     var selectedRange by remember { mutableIntStateOf(1) }
     var selectedMetric by remember { mutableIntStateOf(1) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -124,10 +128,10 @@ fun DashboardScreen() {
                 MetricChart()
             }
         }
-        item { MetricGrid() }
-        item { LowStockSection() }
-        item { PromotionSection() }
-        item { CategoriesSection() }
+        item { MetricGrid(onOrdersClick) }
+        item { LowStockSection(onProductsClick) }
+        item { PromotionSection(onDishesClick) }
+        item { CategoriesSection(onDishesClick) }
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showDatePicker) {
@@ -226,7 +230,7 @@ private fun MetricChart() {
 }
 
 @Composable
-private fun MetricGrid() {
+private fun MetricGrid(onOrdersClick: () -> Unit) {
     val items = listOf(
         DashboardMetric("Выручка", "487 320 ₽", "↑ 18%", Icons.Outlined.AccountBalanceWallet, DashboardGreen),
         DashboardMetric("Прибыль", "162 450 ₽", "↑ 23%", Icons.Outlined.BarChart, DashboardGreen),
@@ -237,7 +241,7 @@ private fun MetricGrid() {
         items.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { metric ->
-                    StoqCard(modifier = Modifier.weight(1f)) {
+                    StoqCard(modifier = Modifier.weight(1f).clickable(enabled = metric.title == "Заказы", onClick = onOrdersClick)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(42.dp).clip(CircleShape).background(metric.tint.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Icon(metric.icon, null, tint = metric.tint) }
                             Spacer(Modifier.width(10.dp))
@@ -255,13 +259,13 @@ private fun MetricGrid() {
 }
 
 @Composable
-private fun LowStockSection() {
+private fun LowStockSection(onProductsClick: () -> Unit) {
     val products = listOf(
         StockProduct("Помидоры свежие", "5 кг", "72348", R.drawable.auth_tomatoes),
         StockProduct("Сыр моцарелла", "3 кг", "72349", null),
         StockProduct("Молоко 3,2%", "4 л", "72350", null)
     )
-    SectionCard("Товары с низким остатком", "Все товары") {
+    SectionCard("Товары с низким остатком", "Все товары", onProductsClick) {
         products.forEachIndexed { index, product ->
             if (index != 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .35f))
             Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -275,9 +279,9 @@ private fun LowStockSection() {
 }
 
 @Composable
-private fun PromotionSection() {
+private fun PromotionSection(onDishesClick: () -> Unit) {
     val dishes = listOf("Стейк из лосося" to "1 490 ₽", "Салат «Цезарь» с креветками" to "790 ₽", "Чизкейк с ягодами" to "450 ₽")
-    SectionCard("Блюда для продвижения", "Все блюда") {
+    SectionCard("Блюда для продвижения", "Все блюда", onDishesClick) {
         dishes.forEachIndexed { index, (name, price) ->
             if (index != 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .35f))
             Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -294,10 +298,10 @@ private fun PromotionSection() {
 }
 
 @Composable
-private fun CategoriesSection() {
+private fun CategoriesSection(onDishesClick: () -> Unit) {
     val categories = listOf("Горячее" to 16, "Салаты" to 12, "Десерты" to 8, "В стоп-листе" to 6, "Супы" to 4, "Напитки" to 2)
     val colors = listOf(DashboardGreen, DashboardBlue, DashboardPurple, DashboardRed, DashboardYellow, Color.LightGray)
-    SectionCard("Количество блюд по категориям", "Все блюда") {
+    SectionCard("Количество блюд по категориям", "Все блюда", onDishesClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(130.dp)) {
                 Canvas(Modifier.size(130.dp)) {
@@ -323,9 +327,9 @@ private fun CategoriesSection() {
 }
 
 @Composable
-private fun SectionCard(title: String, action: String, content: @Composable () -> Unit) {
+private fun SectionCard(title: String, action: String, onActionClick: () -> Unit, content: @Composable () -> Unit) {
     StoqCard(modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) { Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); Text(action, modifier = Modifier.clip(MaterialTheme.shapes.small).clickable { }.padding(6.dp), color = DashboardGreen, style = MaterialTheme.typography.labelLarge) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) { Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); Text(action, modifier = Modifier.clip(MaterialTheme.shapes.small).clickable(onClick = onActionClick).padding(6.dp), color = DashboardGreen, style = MaterialTheme.typography.labelLarge) }
         Spacer(Modifier.height(8.dp))
         content()
     }
