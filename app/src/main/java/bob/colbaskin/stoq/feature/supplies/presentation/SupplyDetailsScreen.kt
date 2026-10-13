@@ -100,8 +100,8 @@ fun SupplyDetailsScreen(
             category = "мог",
             quantity = item.quantity.toDisplayQuantity(),
             unit = item.unit.ifBlank { "мог" },
-            unitPrice = "мог",
-            total = "мог",
+            unitPrice = item.price?.toRubles() ?: "мог",
+            total = item.totalPrice?.toRubles() ?: "мог",
             expiresAt = item.expiresAt?.take(10) ?: "мог",
             reception = if (supply.status == "RECEIVED") ReceptionStatus.Accepted else ReceptionStatus.Waiting
         )
@@ -172,11 +172,11 @@ private fun DetailHeader(supplyNumber: String, onBack: () -> Unit) {
 private fun SupplyOverview(supply: Supply?) {
     val colors = LocalColors.current
     val metrics = listOf(
-        DetailMetric("ID поставки", supply?.number ?: "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.primaryDark),
+        DetailMetric("ID поставки", supply?.id?.toString() ?: "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.primaryDark),
         DetailMetric("Поступила", supply?.receivedAt?.take(10) ?: "мог", Icons.Outlined.CalendarToday, colors.primaryDark),
         DetailMetric("Позиций", supply?.items?.size?.toString() ?: "мог", Icons.Outlined.Inventory2, colors.success),
-        DetailMetric("Сумма", "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
-        DetailMetric("Принял", "мог", Icons.Outlined.PersonOutline, colors.secondary)
+        DetailMetric("Сумма", supply?.totalPrice?.toRubles() ?: "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
+        DetailMetric("Принял", supply?.supplier ?: "мог", Icons.Outlined.PersonOutline, colors.secondary)
     )
     Column {
         Text("Информация о поставке", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
@@ -352,3 +352,4 @@ private data class DetailMetric(
 )
 
 private fun Double.toDisplayQuantity() = if (this % 1.0 == 0.0) toLong().toString() else toString()
+private fun Double.toRubles() = "${toDisplayQuantity()} ₽"
