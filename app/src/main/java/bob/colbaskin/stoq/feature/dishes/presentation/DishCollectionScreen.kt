@@ -26,15 +26,19 @@ import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
 import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: (String) -> Unit, viewModel: DishesViewModel = hiltViewModel()) {
     val colors = LocalColors.current
     val filters = viewModel.collectionFilters(recommended)
+    LaunchedEffect(recommended) { if (!recommended) viewModel.loadStopList() }
     var showCustomDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
-    val source = if (recommended) viewModel.allDishes.filter { it.active } else viewModel.allDishes
+    val source = if (recommended) viewModel.allDishes.filter { it.active } else viewModel.stopListDishes
     val dishes = source.filter { dish ->
         val categoryMatches = filters.category == "Все категории" || dish.category == filters.category
         val textMatches = filters.query.isBlank() || dish.name.contains(filters.query, true) || dish.description.contains(filters.query, true)
@@ -80,7 +84,16 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
             }
         }
         item { Text(if (recommended) "Рекомендуемые блюда" else "Блюда в стоп-листе", style = MaterialTheme.typography.titleLarge) }
-        items(sortedDishes, key = Dish::id) { dish -> CollectionDishCard(dish, recommended) { onDishClick(dish.id) } }
+        items(sortedDishes, key = Dish::id) { dish ->
+            CollectionDishCard(dish, recommended, viewModel.stopListReasonTitle(dish.id), viewModel.stopListReason(dish.id)) { onDishClick(dish.id) }
+        }
+    }
+    if (!recommended) {
+        when (val state = viewModel.stopListState) {
+            UiState.Loading -> LoadingScreen()
+            is UiState.Error -> ErrorScreen(state.title, state.text, viewModel::loadStopList, onBack)
+            is UiState.Success -> Unit
+        }
     }
     if (showCustomDatePicker) {
         DatePickerDialog(
@@ -153,7 +166,7 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
 }
 @Composable private fun FilterButton(text: String, modifier: Modifier, onClick: () -> Unit, primary: Boolean = false) { val c = LocalColors.current; Surface(modifier.height(48.dp).clickable(onClick = onClick), color = if (primary) c.primary else c.surface, shape = MaterialTheme.shapes.medium, border = if (primary) null else BorderStroke(1.dp, c.outline)) { Box(contentAlignment = Alignment.Center) { Text(text, style = MaterialTheme.typography.labelMedium, color = if (primary) c.textOnPrimary else c.textPrimary) } } }
 
-@Composable private fun CollectionDishCard(dish: Dish, recommended: Boolean, onClick: () -> Unit) {
+@Composable private fun CollectionDishCard(dish: Dish, recommended: Boolean, stopListReasonTitle: String, stopListReason: String, onClick: () -> Unit) {
     val c = LocalColors.current
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(containerColor = c.surface)) {
         Column(Modifier.padding(12.dp)) {
@@ -179,8 +192,11 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
                 Surface(Modifier.fillMaxWidth(), color = c.error.copy(alpha = .10f), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Alarm, null, Modifier.size(19.dp), c.error); Spacer(Modifier.width(8.dp)); Text("мог", style = MaterialTheme.typography.labelMedium, color = c.error, fontWeight = FontWeight.Bold) } }
             } else {
                 Row(Modifier.fillMaxWidth()) {
-                    Fact("Причина", "мог", c.textPrimary, Modifier.weight(1f), emphasize = true)
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { Text("Ожидаем поставку", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1); Text("мог", style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1) }
+                    Column(Modifier.weight(1f)) {
+                        Text(stopListReasonTitle, style = MaterialTheme.typography.bodySmall, color = c.error, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(stopListReason, modifier = Modifier.padding(top = 3.dp), style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 2)
+                    }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { Text("Ожидаем поставку", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1); Text("мог", style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1) }
                 }
             }
         }

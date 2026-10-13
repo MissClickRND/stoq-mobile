@@ -6,9 +6,12 @@ import kotlinx.serialization.Serializable
 data class DishDto(
     val id: Long,
     val name: String,
+    val category: String? = null,
     val description: String = "мог",
     val imageURL: String? = null,
     val salePrice: Double? = null,
+    val costPrice: Double? = null,
+    val availablePortions: Double? = null,
     val isDeleted: Boolean = false,
     val recipeItems: List<DishIngredientDto> = emptyList()
 )
@@ -28,12 +31,17 @@ data class RecipeProductDto(
 data class DishIngredientDto(
     val productId: Long,
     val quantity: Double,
-    val product: RecipeProductDto? = null
+    val product: RecipeProductDto? = null,
+    val price: Double? = null,
+    val stock: Double? = null,
+    val portions: Double? = null,
+    val expiresAt: String? = null
 )
 
 @Serializable
 data class CreateDishDto(
     val name: String,
+    val category: String? = null,
     val description: String,
     val imageURL: String? = null,
     val salePrice: Double,

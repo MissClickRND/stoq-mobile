@@ -38,13 +38,18 @@ import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
 import bob.colbaskin.stoq.feature.dishes.domain.model.IngredientStockStatus
 
 @Composable
-fun DishDetailsScreen(id: String, onBack: () -> Unit, viewModel: DishDetailsViewModel = hiltViewModel()) {
+fun DishDetailsScreen(
+    id: String,
+    onBack: () -> Unit,
+    onStorageClick: () -> Unit,
+    viewModel: DishDetailsViewModel = hiltViewModel()
+) {
     LaunchedEffect(id) { viewModel.load(id) }
     var confirmDeletion by remember { mutableStateOf(false) }
     when (val state = viewModel.state) {
         UiState.Loading -> LoadingScreen()
         is UiState.Error -> ErrorScreen(title = state.title, text = state.text, onRetry = { viewModel.load(id) }, onBack = onBack)
-        is UiState.Success -> DishDetailsContent(state.data, onBack, onDelete = { confirmDeletion = true })
+        is UiState.Success -> DishDetailsContent(state.data, onBack, onStorageClick, onDelete = { confirmDeletion = true })
     }
     if (confirmDeletion) {
         AlertDialog(
@@ -59,7 +64,7 @@ fun DishDetailsScreen(id: String, onBack: () -> Unit, viewModel: DishDetailsView
 }
 
 @Composable
-private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onDelete: () -> Unit) {
+private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: () -> Unit, onDelete: () -> Unit) {
     val colors = LocalColors.current
     LazyColumn(Modifier.fillMaxSize().background(colors.background), contentPadding = PaddingValues(start = StoqSpacing.ScreenHorizontal, top = 8.dp, end = StoqSpacing.ScreenHorizontal, bottom = StoqSpacing.ScreenHorizontal), verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)) {
         item {
@@ -74,7 +79,7 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onDelete: () -> U
         item { DetailMetrics(dish) }
         item { Ingredients(dish) }
         item { SalesChart() }
-        item { KeyStock(dish) }
+        item { KeyStock(dish, onStorageClick) }
     }
 }
 
@@ -83,7 +88,12 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onDelete: () -> U
     Card(colors = CardDefaults.cardColors(containerColor = colors.surface), shape = MaterialTheme.shapes.medium) {
         Column(Modifier.padding(StoqSpacing.Large)) {
             Text(dish.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-            Text(dish.description, color = colors.textSecondary); Spacer(Modifier.height(StoqSpacing.Medium)); StatusPill(dish.active); Spacer(Modifier.height(StoqSpacing.Large))
+            Text(dish.description, color = colors.textSecondary)
+            Spacer(Modifier.height(StoqSpacing.Small))
+            DishCategoryTag(dish.category)
+            Spacer(Modifier.height(StoqSpacing.Medium))
+            StatusPill(dish.active)
+            Spacer(Modifier.height(StoqSpacing.Large))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 HeroValue("Цена продажи", dish.price.dataOrRubles(), Modifier.weight(1f))
                 VerticalDivider(Modifier.height(62.dp), color = colors.outline)
@@ -171,12 +181,16 @@ private fun SalesBars(values: List<Int>) {
     }
 }
 
-@Composable private fun KeyStock(dish: Dish) {
+@Composable private fun KeyStock(dish: Dish, onStorageClick: () -> Unit) {
     val colors = LocalColors.current
-    SectionCard("Остатки ключевых ингредиентов") {
+    val maximumPortions = dish.ingredients.mapNotNull { it.portions }.maxOrNull()
+    SectionCard("Остатки ключевых ингредиентов", onActionClick = onStorageClick) {
         dish.ingredients.forEach { item ->
             val low = item.status == IngredientStockStatus.RunningLow
-            val fraction = if (item.status == IngredientStockStatus.Unknown) 0f else if (low) .28f else .68f
+            val fraction = when {
+                item.portions == null || maximumPortions == null || maximumPortions <= 0 -> 0f
+                else -> (item.portions / maximumPortions).toFloat().coerceIn(0f, 1f)
+            }
             val color = if (low) colors.warning else colors.primary
             Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(item.name, Modifier.weight(1.15f), color = colors.textPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
@@ -202,7 +216,12 @@ private fun SalesBars(values: List<Int>) {
                         }
                     }
                 } else if (showChevron) {
-                    Icon(Icons.Outlined.ChevronRight, null, tint = colors.textPrimary)
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        "Открыть раздел",
+                        Modifier.clip(MaterialTheme.shapes.small).clickable(enabled = onActionClick != null) { onActionClick?.invoke() }.padding(3.dp),
+                        tint = colors.textPrimary
+                    )
                 }
             }
             Spacer(Modifier.height(StoqSpacing.Small))

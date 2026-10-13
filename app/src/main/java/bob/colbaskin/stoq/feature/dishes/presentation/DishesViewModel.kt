@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.feature.dishes.data.RemoteDishRepository
+import bob.colbaskin.stoq.feature.dishes.data.RemoteRecommendationsRepository
+import bob.colbaskin.stoq.feature.dishes.data.StopListDish
 import bob.colbaskin.stoq.feature.dishes.data.model.CreateDishDto
 import bob.colbaskin.stoq.feature.dishes.data.model.CreateDishIngredientDto
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
@@ -22,7 +24,8 @@ data class DishesState(
     val query: String = "",
     val category: String = "Все",
     val dishes: List<Dish> = emptyList(),
-    val loadState: UiState<List<Dish>> = UiState.Loading
+    val loadState: UiState<List<Dish>> = UiState.Loading,
+    val isRefreshing: Boolean = false
 )
 
 data class CollectionFilterState(
@@ -37,6 +40,7 @@ data class CollectionFilterState(
 @HiltViewModel
 class DishesViewModel @Inject constructor(
     private val repository: RemoteDishRepository,
+    private val recommendationsRepository: RemoteRecommendationsRepository,
     private val productRepository: RemoteProductRepository
 ) : ViewModel() {
     var allDishes by mutableStateOf<List<Dish>>(emptyList())
@@ -45,6 +49,11 @@ class DishesViewModel @Inject constructor(
         private set
     var products by mutableStateOf<List<ProductDto>>(emptyList())
         private set
+    var stopListDishes by mutableStateOf<List<Dish>>(emptyList())
+        private set
+    var stopListState by mutableStateOf<UiState<List<StopListDish>>>(UiState.Loading)
+        private set
+    private var stopList = emptyList<StopListDish>()
     private var stopListFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Любая причина"))
     private var recommendationsFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Срочность"))
     private var searchJob: Job? = null
@@ -55,13 +64,15 @@ class DishesViewModel @Inject constructor(
     }
 
     fun refresh() = viewModelScope.launch {
-        state = state.copy(loadState = UiState.Loading)
+        val hasData = allDishes.isNotEmpty()
+        state = if (hasData) state.copy(isRefreshing = true) else state.copy(loadState = UiState.Loading)
         when (val result = repository.getDishes()) {
             is UiState.Success -> {
                 allDishes = result.data
-                state = state.copy(dishes = state.filtered(result.data), loadState = result)
+                rebuildStopListDishes()
+                state = state.copy(dishes = state.filtered(result.data), loadState = result, isRefreshing = false)
             }
-            is UiState.Error -> state = state.copy(dishes = emptyList(), loadState = result)
+            is UiState.Error -> state = state.copy(dishes = if (hasData) state.dishes else emptyList(), loadState = if (hasData) state.loadState else result, isRefreshing = false)
             UiState.Loading -> Unit
         }
     }
@@ -89,6 +100,27 @@ class DishesViewModel @Inject constructor(
     fun selectCategory(category: String) {
         val updated = state.copy(category = category)
         state = updated.copy(dishes = updated.filtered())
+    }
+
+    fun loadStopList() = viewModelScope.launch {
+        stopListState = UiState.Loading
+        when (val result = recommendationsRepository.getStopList()) {
+            is UiState.Success -> {
+                stopList = result.data
+                rebuildStopListDishes()
+                stopListState = result
+            }
+            is UiState.Error -> stopListState = result
+            UiState.Loading -> Unit
+        }
+    }
+
+    fun stopListReason(dishId: String): String = stopList.firstOrNull { it.dishId == dishId }?.reason ?: "мог"
+    fun stopListReasonTitle(dishId: String): String = stopList.firstOrNull { it.dishId == dishId }?.reasonTitle ?: "мог"
+
+    private fun rebuildStopListDishes() {
+        val dishesById = allDishes.associateBy(Dish::id)
+        stopListDishes = stopList.mapNotNull { item -> dishesById[item.dishId]?.copy(active = false) }
     }
     fun collectionFilters(recommended: Boolean) = if (recommended) recommendationsFilterState else stopListFilterState
     fun updateCollectionFilters(recommended: Boolean, update: (CollectionFilterState) -> CollectionFilterState) {

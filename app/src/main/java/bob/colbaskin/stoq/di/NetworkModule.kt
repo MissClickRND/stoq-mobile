@@ -3,6 +3,7 @@ package bob.colbaskin.stoq.di
 import bob.colbaskin.stoq.BuildConfig
 import bob.colbaskin.stoq.feature.auth.data.remote.AuthApiService
 import bob.colbaskin.stoq.feature.dishes.data.remote.DishesApiService
+import bob.colbaskin.stoq.feature.dishes.data.remote.RecommendationsApiService
 import bob.colbaskin.stoq.feature.products.data.remote.InventoryApiService
 import bob.colbaskin.stoq.feature.products.data.remote.ProductsApiService
 import bob.colbaskin.stoq.feature.orders.data.remote.OrdersApiService
@@ -59,6 +60,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideDishesApiService(retrofit: Retrofit): DishesApiService = retrofit.create(DishesApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideRecommendationsApiService(retrofit: Retrofit): RecommendationsApiService = retrofit.create(RecommendationsApiService::class.java)
 
     @Provides
     @Singleton

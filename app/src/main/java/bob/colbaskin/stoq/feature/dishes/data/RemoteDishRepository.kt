@@ -38,9 +38,9 @@ class RemoteDishRepository @Inject constructor(
 }
 
 private fun DishDto.toDish() = Dish(
-    id = id.toString(), name = name, description = description, category = "мог", price = salePrice?.toInt() ?: -1, cost = -1,
+    id = id.toString(), name = name, description = description, category = category?.trim()?.replaceFirstChar { it.uppercase() } ?: "мог", price = salePrice?.toInt() ?: -1, cost = costPrice?.toInt() ?: -1,
     imageUrl = imageURL.orEmpty(), active = !isDeleted, ingredients = recipeItems.map(DishIngredientDto::toRecipeItem), soldToday = -1,
-    weeklyRevenue = -1, popularity = -1, recipeLoaded = true
+    weeklyRevenue = -1, popularity = -1, availablePortions = availablePortions, recipeLoaded = true
 )
 
 private fun DishIngredientDto.toRecipeItem(): RecipeItem {
@@ -49,7 +49,15 @@ private fun DishIngredientDto.toRecipeItem(): RecipeItem {
     return RecipeItem(
         name = product?.name ?: "Товар #$productId",
         amount = listOf(quantity, unit).filter(String::isNotBlank).joinToString(" "),
-        stock = "мог",
-        status = bob.colbaskin.stoq.feature.dishes.domain.model.IngredientStockStatus.Unknown
+        stock = stock?.let { listOf(it.toDisplayQuantity(), unit).filter(String::isNotBlank).joinToString(" ") } ?: "мог",
+        status = when {
+            portions == null -> bob.colbaskin.stoq.feature.dishes.domain.model.IngredientStockStatus.Unknown
+            portions <= 0 -> bob.colbaskin.stoq.feature.dishes.domain.model.IngredientStockStatus.RunningLow
+            else -> bob.colbaskin.stoq.feature.dishes.domain.model.IngredientStockStatus.Available
+        },
+        stockQuantity = stock,
+        portions = portions
     )
 }
+
+private fun Double.toDisplayQuantity() = if (this % 1.0 == 0.0) toLong().toString() else toString()

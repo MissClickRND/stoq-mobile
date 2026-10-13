@@ -13,6 +13,7 @@ data class Dish(
     val soldToday: Int,
     val weeklyRevenue: Int,
     val popularity: Int,
+    val availablePortions: Double? = null,
     val recipeLoaded: Boolean = true
 ) {
     val markup: Int get() = if (price < 0 || cost <= 0) -1 else ((price - cost) * 100 / cost)
@@ -22,7 +23,9 @@ data class RecipeItem(
     val name: String,
     val amount: String,
     val stock: String,
-    val status: IngredientStockStatus
+    val status: IngredientStockStatus,
+    val stockQuantity: Double? = null,
+    val portions: Double? = null
 )
 
 enum class IngredientStockStatus { Available, RunningLow, Unknown }

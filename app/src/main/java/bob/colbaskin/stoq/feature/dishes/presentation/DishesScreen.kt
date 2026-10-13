@@ -31,7 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
-import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
@@ -56,17 +56,22 @@ fun DishesScreen(
     onRecommendationsClick: () -> Unit,
     viewModel: DishesViewModel = hiltViewModel()
 ) {
-    RefreshOnResume(viewModel::refresh)
     val state = viewModel.state
     val colors = LocalColors.current
     val allDishes = viewModel.allDishes
-    val tabs = listOf("Все", "Горячее", "Салаты", "Десерты", "В стоп-листе")
+    val tabs = remember(allDishes) {
+        listOf("Все") + (
+            listOf("Горячее", "Салаты", "Десерты", "Супы") +
+                allDishes.map(Dish::category).filter { it != "мог" }
+            ).distinct()
+    }
     var showAddDialog by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var newDescription by remember { mutableStateOf("") }
     var newPrice by remember { mutableStateOf("") }
     var ingredientDrafts by remember { mutableStateOf(listOf(DishIngredientDraft())) }
     var addToStopList by remember { mutableStateOf(false) }
+    PullToRefreshContainer(state.isRefreshing, viewModel::refresh, Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -88,6 +93,7 @@ fun DishesScreen(
             }
         }
         items(state.dishes, key = Dish::id) { dish -> DishCard(dish) { onDishClick(dish.id) } }
+    }
     }
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = colors.primary, contentColor = colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить блюдо") }
     when (val loadState = state.loadState) {
@@ -405,7 +411,7 @@ private fun FeatureLinkCard(
 }
 
 @Composable private fun DishFilter(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {
-    val colors = LocalColors.current; val tint = if (label == "В стоп-листе") colors.error else colors.success
+    val colors = LocalColors.current; val tint = categoryTint(label, colors)
     Surface(Modifier.height(42.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onClick), color = if (selected) colors.primary.copy(alpha = .25f) else colors.surface, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, if (selected) colors.primary else colors.outline)) {
         Row(Modifier.padding(horizontal = StoqSpacing.Medium), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).background(tint, CircleShape)); Spacer(Modifier.width(6.dp)); Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal); Spacer(Modifier.width(7.dp)); Box(Modifier.size(23.dp).background(colors.surfaceSecondary, CircleShape), contentAlignment = Alignment.Center) { Text(count.toString(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) }
@@ -420,7 +426,7 @@ private fun FeatureLinkCard(
             StoqAsyncImage(dish.imageUrl, dish.name, Modifier.size(120.dp).clip(MaterialTheme.shapes.small), contentScale = ContentScale.Crop)
             Spacer(Modifier.width(StoqSpacing.Medium)); Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Top) { Text(dish.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, color = colors.textPrimary); StatusPill(dish.active) }
-                Spacer(Modifier.height(3.dp)); Text(dish.description, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis); Spacer(Modifier.height(StoqSpacing.Medium))
+                Spacer(Modifier.height(3.dp)); Text(dish.description, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis); Spacer(Modifier.height(6.dp)); DishCategoryTag(dish.category); Spacer(Modifier.height(StoqSpacing.Medium))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     DishCardMetric("Цена", dish.price.takeIf { it >= 0 }?.let { "$it ₽" } ?: "мог", Modifier.weight(1f)); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Наценка", dish.markup.takeIf { it >= 0 }?.let { "$it%" } ?: "мог", Modifier.weight(1f).padding(start = 6.dp), colors.success); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Ингридиенты", if (dish.recipeLoaded) dish.ingredients.size.toString() else "мог", Modifier.weight(1f).padding(start = 6.dp))
                 }
@@ -434,4 +440,21 @@ private fun FeatureLinkCard(
 @Composable fun StatusPill(active: Boolean) { val colors = LocalColors.current; val color = if (active) colors.success else colors.error; Surface(color = color.copy(alpha = .12f), shape = CircleShape) { Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(7.dp).background(color, CircleShape)); Spacer(Modifier.width(6.dp)); Text(if (active) "Активно" else "В стоп-листе", style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1) } } }
 
 private data class DishMetric(val label: String, val value: String, val change: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: androidx.compose.ui.graphics.Color)
-private fun categoryCount(category: String, dishes: List<Dish>) = when (category) { "Все" -> dishes.size; "В стоп-листе" -> dishes.count { !it.active }; else -> dishes.count { it.category == category } }
+private fun categoryCount(category: String, dishes: List<Dish>) = if (category == "Все") dishes.size else dishes.count { it.category == category }
+
+@Composable
+internal fun DishCategoryTag(category: String) {
+    val colors = LocalColors.current
+    val tint = categoryTint(category, colors)
+    Surface(color = tint.copy(alpha = .13f), shape = CircleShape) {
+        Text(category, Modifier.padding(horizontal = 9.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = tint)
+    }
+}
+
+internal fun categoryTint(category: String, colors: bob.colbaskin.stoq.common.designsystem.theme.AppColors) = when (category) {
+    "Горячее" -> colors.warning
+    "Салаты" -> colors.success
+    "Десерты" -> colors.secondary
+    "Супы" -> colors.primaryDark
+    else -> colors.textSecondary
+}
