@@ -33,6 +33,8 @@ class StorageViewModel @Inject constructor(
         private set
     var actionState by mutableStateOf<UiState<Unit>?>(null)
         private set
+    var isRefreshing by mutableStateOf(false)
+        private set
     private var allProducts = emptyList<StorageProduct>()
     private var searchJob: Job? = null
     var inventoryDrafts by mutableStateOf<List<Draft>>(emptyList())
@@ -47,15 +49,17 @@ class StorageViewModel @Inject constructor(
     }
 
     fun refresh() = viewModelScope.launch {
-        state = UiState.Loading
+        val hasData = state is UiState.Success
+        if (hasData) isRefreshing = true else state = UiState.Loading
         when (val result = repository.getInventory()) {
             is UiState.Success -> {
                 allProducts = result.data
                 state = result
             }
-            is UiState.Error -> state = result
+            is UiState.Error -> state = if (hasData) UiState.Success(allProducts) else result
             UiState.Loading -> Unit
         }
+        isRefreshing = false
     }
 
     fun searchProducts(query: String) {

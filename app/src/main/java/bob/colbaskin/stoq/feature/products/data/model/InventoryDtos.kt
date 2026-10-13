@@ -32,7 +32,10 @@ data class InventoryDto(
     val supplyId: Long? = null,
     val productId: Long,
     @SerialName("Quantity")
+    val legacyQuantity: Double? = null,
     val availableQuantity: Double? = null,
+    val price: Double? = null,
+    val totalPrice: Double? = null,
     val initialQuantity: Double = 0.0,
     val expiresAt: String? = null,
     val status: String? = null,

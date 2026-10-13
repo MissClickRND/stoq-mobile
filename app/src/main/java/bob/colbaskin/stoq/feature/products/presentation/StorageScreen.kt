@@ -65,7 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import bob.colbaskin.stoq.common.core.UiState
-import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
 import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
@@ -103,7 +103,6 @@ fun StorageScreen(
     onDraftFeedbackShown: () -> Unit = {},
     viewModel: StorageViewModel = hiltViewModel()
 ) {
-    RefreshOnResume(viewModel::refresh)
     var query by remember { mutableStateOf("") }
     var searchFocused by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("Все") }
@@ -120,6 +119,7 @@ fun StorageScreen(
         }
     }
 
+    PullToRefreshContainer(viewModel.isRefreshing, viewModel::refresh, Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().background(CustomTheme.colors.background)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -169,8 +169,8 @@ fun StorageScreen(
                 }
             }
         }
-        item { ExpiryBanner() }
         items(filteredProducts, key = Product::stableId) { product -> ProductCard(product) { productToDelete = product } }
+    }
     }
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
     when (inventoryState) {
@@ -394,28 +394,6 @@ private fun CategoryTab(label: String, count: String, selected: Boolean, onClick
             ) {
                 Text(count, style = MaterialTheme.typography.bodySmall, color = if (selected) CustomTheme.colors.surface else CustomTheme.colors.textSecondary, fontWeight = FontWeight.Bold)
             }
-        }
-    }
-}
-
-@Composable
-private fun ExpiryBanner() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-        color = CustomTheme.colors.warning.copy(alpha = .10f),
-        border = BorderStroke(1.dp, CustomTheme.colors.warning.copy(alpha = .18f))
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(CircleShape).background(CustomTheme.colors.warning.copy(alpha = .13f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.AccessTime, null, tint = CustomTheme.colors.warning, modifier = Modifier.size(27.dp))
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text("8 продуктов скоро истекут", style = MaterialTheme.typography.titleMedium)
-                Text("Проверьте сроки годности и спланируйте использование", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textSecondary)
-            }
-            Text("›", style = MaterialTheme.typography.headlineMedium)
         }
     }
 }

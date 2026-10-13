@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -312,6 +313,7 @@ private fun EditableActualQuantity(
     val colors = LocalColors.current
     var editing by remember { mutableStateOf(false) }
     var value by remember(quantity) { mutableStateOf(quantity.formatQuantity()) }
+    var showWriteOffDialog by remember { mutableStateOf(false) }
     val parsedValue = value.replace(',', '.').toDoubleOrNull()
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -379,10 +381,19 @@ private fun EditableActualQuantity(
                     )
                 }
             }
-            IconButton(onClick = onWriteOff, modifier = Modifier.size(38.dp)) {
+            IconButton(onClick = { showWriteOffDialog = true }, modifier = Modifier.size(38.dp)) {
                 Icon(Icons.Outlined.DeleteOutline, "Списать продукт", tint = colors.error)
             }
         }
+    }
+    if (showWriteOffDialog) {
+        AlertDialog(
+            onDismissRequest = { showWriteOffDialog = false },
+            title = { Text("Списать товар?") },
+            text = { Text("Фактический остаток будет установлен в 0. Изменение появится на экране подтверждения инвентаризации.") },
+            confirmButton = { Button(onClick = { showWriteOffDialog = false; onWriteOff() }) { Text("Списать") } },
+            dismissButton = { OutlinedButton(onClick = { showWriteOffDialog = false }) { Text("Отмена") } }
+        )
     }
 }
 

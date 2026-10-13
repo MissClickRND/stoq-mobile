@@ -17,7 +17,9 @@ data class StorageProduct(
     val availableQuantity: Double,
     val unit: String,
     val currentStock: String,
-    val expiryDate: String?
+    val expiryDate: String?,
+    val price: Double?,
+    val totalPrice: Double?
 )
 
 @Singleton
@@ -50,7 +52,7 @@ class RemoteInventoryRepository @Inject constructor(
 private fun InventoryDto.toStorageProduct(): StorageProduct? {
     val product = product ?: return null
     val unit = product.unit?.shortName.orEmpty()
-    val quantity = availableQuantity ?: balance?.availableQuantity ?: initialQuantity
+    val quantity = availableQuantity ?: legacyQuantity ?: balance?.availableQuantity ?: initialQuantity
     return StorageProduct(
         id = product.id,
         batchId = id,
@@ -58,7 +60,9 @@ private fun InventoryDto.toStorageProduct(): StorageProduct? {
         availableQuantity = quantity,
         unit = unit,
         currentStock = listOf(quantity.toDisplayQuantity(), unit).filter(String::isNotBlank).joinToString(" "),
-        expiryDate = expiresAt?.take(10)
+        expiryDate = expiresAt?.take(10),
+        price = price,
+        totalPrice = totalPrice
     )
 }
 
