@@ -9,6 +9,7 @@ import bob.colbaskin.stoq.feature.orders.data.model.AddOrderItemsDto
 import bob.colbaskin.stoq.feature.orders.data.model.CreateOrderDto
 import bob.colbaskin.stoq.feature.orders.data.model.OrderDto
 import bob.colbaskin.stoq.feature.orders.data.model.OrderItemDto
+import bob.colbaskin.stoq.feature.orders.data.model.ChangeStatusDto
 import bob.colbaskin.stoq.feature.orders.data.remote.OrdersApiService
 import bob.colbaskin.stoq.feature.orders.domain.OrderRepository
 import bob.colbaskin.stoq.feature.orders.domain.model.Availability
@@ -46,9 +47,44 @@ class RemoteOrderRepository @Inject constructor(
         successHandler = { dishes -> dishes.filterNot(DishDto::isDeleted).map(DishDto::toOrderItem) }
     ).toUiState()
 
-    override suspend fun create(items: List<OrderItem>): UiState<Order> = safeApiCall(
+    override suspend fun create(
+        date: String,
+        type: String,
+        table: Int?,
+        guests: Int,
+        items: List<OrderItem>
+    ): UiState<Order> = safeApiCall(
         apiCall = {
-            val order = ordersApi.createOrder(CreateOrderDto(items.map { OrderItemDto(dishId = it.dishId.toLong(), quantity = it.quantity) }))
+            val order = ordersApi.createOrder(
+                CreateOrderDto(
+                    date = date,
+                    type = type,
+                    table = table,
+                    guests = guests,
+                    items = items.map { OrderItemDto(dishId = it.dishId.toLong(), quantity = it.quantity) }
+                )
+            )
+            val dishes = dishesApi.getDishes().associateBy(DishDto::id)
+            order.toOrder(dishes)
+        },
+        successHandler = { it }
+    ).toUiState()
+
+    override suspend fun addItems(id: String, items: List<OrderItem>): UiState<Order> = safeApiCall(
+        apiCall = {
+            val order = ordersApi.addOrderItems(
+                id.toLong(),
+                AddOrderItemsDto(items.map { OrderItemDto(dishId = it.dishId.toLong(), quantity = it.quantity) })
+            )
+            val dishes = dishesApi.getDishes().associateBy(DishDto::id)
+            order.toOrder(dishes)
+        },
+        successHandler = { it }
+    ).toUiState()
+
+    override suspend fun complete(id: String): UiState<Order> = safeApiCall(
+        apiCall = {
+            val order = ordersApi.changeStatus(id.toLong(), ChangeStatusDto(status = "completed"))
             val dishes = dishesApi.getDishes().associateBy(DishDto::id)
             order.toOrder(dishes)
         },
@@ -69,15 +105,21 @@ class RemoteOrderRepository @Inject constructor(
 
 private fun DishDto.toOrderItem() = OrderItem(
     dishId = id.toString(), name = name, category = "мог", price = salePrice?.toInt() ?: 0,
-    imageUrl = imageURL.orEmpty(), quantity = 1, availability = Availability.Unknown
+    imageUrl = imageURL.orEmpty(), quantity = 1,
+    availability = when (availablePortions) {
+        null -> Availability.Unknown
+        0.0 -> Availability.Unavailable
+        else -> Availability.Available
+    }
 )
 
 private fun OrderDto.toOrder(dishes: Map<Long, DishDto>): Order {
-    val dateTime = createdAt.orEmpty().replace('T', ' ').take(16)
+    val dateTime = (date ?: createdAt).orEmpty().replace('T', ' ').take(16)
     return Order(
         id = id.toString(), date = dateTime.take(10).ifBlank { "мог" }, time = dateTime.drop(11).ifBlank { "мог" },
         status = when (status.lowercase()) { "completed", "done" -> OrderStatus.Completed; "preparing" -> OrderStatus.Preparing; else -> OrderStatus.Processing },
-        type = OrderType.DineIn, location = "мог", customer = "мог", supplyId = supplyId?.toString(),
+        type = when (type?.lowercase()) { "takeaway", "delivery" -> OrderType.Delivery; else -> OrderType.DineIn },
+        location = table?.let { "Стол $it" } ?: "мог", customer = "мог", supplyId = supplyId?.toString(), table = table, guests = guests,
         items = items.map { item -> dishes[item.dishId]?.toOrderItem()?.copy(quantity = item.quantity)
             ?: OrderItem(item.dishId.toString(), "Блюдо #${item.dishId}", "мог", 0, "", item.quantity, Availability.Unknown) }
     )

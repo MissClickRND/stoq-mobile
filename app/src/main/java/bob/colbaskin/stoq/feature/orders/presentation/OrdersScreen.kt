@@ -97,7 +97,7 @@ import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
 import bob.colbaskin.stoq.common.drafts.presentation.UnsavedChangesDialog
 import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 import bob.colbaskin.stoq.common.core.UiState
-import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.R
@@ -117,13 +117,13 @@ import androidx.compose.ui.window.DialogProperties
 fun OrdersScreen(
     onCreateOrder: () -> Unit,
     onOrderClick: (String) -> Unit,
+    onEditOrder: (String) -> Unit,
     onSupplyClick: (String) -> Unit,
     onDraftsClick: () -> Unit,
     draftFeedback: String? = null,
     onDraftFeedbackShown: () -> Unit = {},
     viewModel: OrdersViewModel = hiltViewModel()
 ) {
-    RefreshOnResume(viewModel::reload)
     val state by viewModel.state.collectAsState()
     val orders = state.orders.filter { order ->
         val matchesText = state.query.isBlank() || (listOf(order.id, order.customer, order.location) + order.items.map { it.name }).any { it.contains(state.query, true) }
@@ -131,6 +131,9 @@ fun OrdersScreen(
         val matchesType = state.type == "Все типы заказа" || (state.type == "В зале" && order.type == OrderType.DineIn) || (state.type == "Доставка" && order.type == OrderType.Delivery)
         matchesText && matchesStatus && matchesType
     }
+    var orderToComplete by remember { mutableStateOf<Order?>(null) }
+    var orderToDelete by remember { mutableStateOf<Order?>(null) }
+    PullToRefreshContainer(state.isRefreshing, viewModel::reload, Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val loadState = state.loadState) {
             UiState.Loading -> LoadingScreen()
@@ -145,7 +148,10 @@ fun OrdersScreen(
                     item { OrderSearch(state.query, state.orders) { viewModel.onAction(OrdersAction.Query(it)) } }
                     item { MetricsGrid(state) }
                     item { Filters(state, viewModel::onAction) }
-                    items(orders, key = { it.id }) { OrderCard(it, onOrderClick, onSupplyClick) }
+                    state.error?.let { error -> item { ErrorBanner("Ошибка заказа", error) } }
+                    items(orders, key = { it.id }) { order ->
+                        OrderCard(order, onOrderClick, onSupplyClick, onEditOrder, onDelete = { orderToDelete = order }) { orderToComplete = order }
+                    }
                 }
                 FloatingActionButton(
                     onClick = onCreateOrder,
@@ -157,6 +163,25 @@ fun OrdersScreen(
         }
         }
     }
+    }
+    orderToComplete?.let { order ->
+        AlertDialog(
+            onDismissRequest = { orderToComplete = null },
+            title = { Text("Завершить заказ?") },
+            text = { Text("Заказ #${order.id} будет отмечен как выполненный. Добавить новые блюда после завершения уже нельзя.") },
+            confirmButton = { Button(onClick = { viewModel.complete(order.id); orderToComplete = null }) { Text("Завершить") } },
+            dismissButton = { OutlinedButton(onClick = { orderToComplete = null }) { Text("Отмена") } }
+        )
+    }
+    orderToDelete?.let { order ->
+        AlertDialog(
+            onDismissRequest = { orderToDelete = null },
+            title = { Text("Удалить заказ?") },
+            text = { Text("Заказ #${order.id} будет удалён без возможности восстановления.") },
+            confirmButton = { Button(onClick = { viewModel.delete(order.id); orderToDelete = null }) { Text("Удалить") } },
+            dismissButton = { OutlinedButton(onClick = { orderToDelete = null }) { Text("Отмена") } }
+        )
+    }
     DraftSnackbar(draftFeedback, onDraftFeedbackShown, Modifier.padding(bottom = 20.dp))
 }
 
@@ -165,6 +190,7 @@ fun CreateOrderScreen(
     onBack: () -> Unit,
     onOrdersClick: () -> Unit,
     draftId: String? = null,
+    editOrderId: String? = null,
     viewModel: OrdersViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -177,10 +203,21 @@ fun CreateOrderScreen(
             viewModel.restoreDraft(draftId)
         }
     }
+    LaunchedEffect(editOrderId, state.menu) {
+        if (editOrderId != null && state.menu.isNotEmpty() && state.editingOrderId != editOrderId) {
+            viewModel.startEditing(editOrderId)
+        }
+    }
     BackHandler(enabled = hasChanges) { showExitDialog = true }
-    when (val loadState = state.loadState) {
+    val screenLoadState: UiState<Unit> = if (editOrderId == null) state.loadState else state.editLoadState ?: UiState.Loading
+    when (val loadState = screenLoadState) {
         UiState.Loading -> LoadingScreen()
-        is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::reload, onBack)
+        is UiState.Error -> ErrorScreen(
+            loadState.title,
+            loadState.text,
+            onRetry = { editOrderId?.let(viewModel::startEditing) ?: viewModel.reload() },
+            onBack = onBack
+        )
         is UiState.Success -> CreateOrderContent(
             state = state,
             onBack = { if (hasChanges) showExitDialog = true else onBack() },
@@ -208,25 +245,33 @@ private fun CreateOrderContent(
     onAction: (OrdersAction) -> Unit
 ) {
     val menu = state.menu.filter { state.menuQuery.isBlank() || it.name.contains(state.menuQuery, true) }
+    val isEditing = state.editingOrderId != null
     var guestOrderDialogVisible by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { ScreenHeader("Новый заказ", "Добавьте блюда в заказ", onBack) }
-        item { NewOrderParameters(state, onAction) }
+        item { ScreenHeader(if (isEditing) "Редактирование заказа" else "Новый заказ", if (isEditing) "Добавьте блюда в незавершённый заказ" else "Добавьте блюда в заказ", onBack) }
+        if (!isEditing) item { NewOrderParameters(state, onAction) }
+        state.editingOrder?.let { order ->
+            item { OrderDetailsInfo(order) }
+            item { Text("Текущий состав заказа", style = MaterialTheme.typography.titleLarge) }
+            items(order.items, key = { "current-${it.dishId}" }) { OrderDetailItem(it) }
+            item { Text("Добавить блюда", style = MaterialTheme.typography.titleLarge) }
+        }
         item { DishPicker(state.menuQuery, menu, onAction) { guestOrderDialogVisible = true } }
-        item { OrderSummary(state) }
-        item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
+        if (state.basket.isNotEmpty()) item { OrderSummary(state) }
+        if (state.basket.isNotEmpty()) item { Text(if (isEditing) "Новые блюда" else "Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
         items(state.basket, key = { it.dishId }) { BasketItem(it, onAction) }
         if (state.created) {
-            item { CreatedBanner { onAction(OrdersAction.ResetCreation); onOrdersClick() } }
+            item { CreatedBanner(isEditing) { onAction(OrdersAction.ResetCreation); onOrdersClick() } }
         } else if (state.basket.isNotEmpty()) {
             if (state.checked && state.basket.any { it.availability == Availability.Unavailable }) item { ErrorBanner("Нельзя создать заказ", "1 блюдо недоступно") }
             state.error?.let { text -> item { ErrorBanner("Ошибка заказа", text) } }
             item { CreateActions(state, onAction, onSaveAndReturn) }
-        } else item { EmptyBasket() }
+        } else if (!isEditing) item { EmptyBasket() }
+        else item { EditOrderHint() }
         item { Spacer(Modifier.height(22.dp)) }
     }
     if (guestOrderDialogVisible) {
@@ -238,15 +283,24 @@ private fun CreateOrderContent(
 fun OrderDetailsScreen(
     orderId: String,
     onBack: () -> Unit,
+    onEditOrder: (String) -> Unit,
     viewModel: OrderDetailsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     var deleteDialogVisible by remember { mutableStateOf(false) }
+    var completeDialogVisible by remember { mutableStateOf(false) }
     LaunchedEffect(orderId) { viewModel.load(orderId) }
     when (val orderState = state) {
         UiState.Loading -> LoadingScreen()
         is UiState.Error -> ErrorScreen(orderState.title, orderState.text, { viewModel.load(orderId) }, onBack)
-        is UiState.Success -> OrderDetailsContent(orderId, orderState.data, onBack) { deleteDialogVisible = true }
+        is UiState.Success -> OrderDetailsContent(
+            orderId = orderId,
+            order = orderState.data,
+            onBack = onBack,
+            onDelete = { deleteDialogVisible = true },
+            onEdit = { onEditOrder(orderId) },
+            onComplete = { completeDialogVisible = true }
+        )
     }
     if (deleteDialogVisible) {
         AlertDialog(
@@ -259,10 +313,26 @@ fun OrderDetailsScreen(
             dismissButton = { OutlinedButton(onClick = { deleteDialogVisible = false }) { Text("Отмена") } }
         )
     }
+    if (completeDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { completeDialogVisible = false },
+            title = { Text("Завершить заказ?") },
+            text = { Text("Заказ #$orderId будет отмечен как выполненный. Добавить новые блюда после завершения уже нельзя.") },
+            confirmButton = { Button(onClick = { completeDialogVisible = false; viewModel.complete(orderId) }) { Text("Завершить") } },
+            dismissButton = { OutlinedButton(onClick = { completeDialogVisible = false }) { Text("Отмена") } }
+        )
+    }
 }
 
 @Composable
-private fun OrderDetailsContent(orderId: String, order: Order, onBack: () -> Unit, onDelete: () -> Unit) {
+private fun OrderDetailsContent(
+    orderId: String,
+    order: Order,
+    onBack: () -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
+    onComplete: () -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp),
@@ -273,14 +343,23 @@ private fun OrderDetailsContent(orderId: String, order: Order, onBack: () -> Uni
         item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
         items(order.items, key = { it.dishId }) { OrderDetailItem(it) }
         item { OrderDetailsSummary(order) }
+        if (order.status != OrderStatus.Completed) {
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) { Text("Добавить блюда") }
+                    Button(onClick = onComplete, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.Check, null); Text("Завершить", Modifier.padding(start = 6.dp)) }
+                }
+            }
+        }
         item {
             OutlinedButton(
                 onClick = onDelete,
+                enabled = order.status != OrderStatus.Completed,
                 modifier = Modifier.fillMaxWidth(),
                 border = BorderStroke(1.dp, CustomTheme.colors.error)
             ) {
                 Icon(Icons.Outlined.DeleteOutline, null, tint = CustomTheme.colors.error)
-                Text("Удалить заказ", modifier = Modifier.padding(start = StoqSpacing.Small), color = CustomTheme.colors.error)
+                Text(if (order.status == OrderStatus.Completed) "Удаление недоступно" else "Удалить заказ", modifier = Modifier.padding(start = StoqSpacing.Small), color = CustomTheme.colors.error)
             }
         }
         item { Spacer(Modifier.height(20.dp)) }
@@ -453,7 +532,14 @@ private fun Filters(state: OrdersState, action: (OrdersAction) -> Unit) {
 }
 
 @Composable
-private fun OrderCard(order: Order, onClick: (String) -> Unit, onSupplyClick: (String) -> Unit) = StoqCard(
+private fun OrderCard(
+    order: Order,
+    onClick: (String) -> Unit,
+    onSupplyClick: (String) -> Unit,
+    onEdit: (String) -> Unit,
+    onDelete: () -> Unit,
+    onComplete: () -> Unit
+) = StoqCard(
     modifier = Modifier.fillMaxWidth().clickable { onClick(order.id) },
     contentPadding = PaddingValues(10.dp)
 ) {
@@ -472,9 +558,9 @@ private fun OrderCard(order: Order, onClick: (String) -> Unit, onSupplyClick: (S
             Text("Арт. ${item?.dishId ?: "мог"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Column(horizontalAlignment = Alignment.End) {
-            StoqStatusPill(if (isAvailable) "В норме" else "мог", if (isAvailable) StoqStatusTone.Success else StoqStatusTone.Warning)
+            StoqStatusPill(order.status.label(), order.status.tone())
             Surface(
-                modifier = Modifier.padding(top = 7.dp).size(30.dp),
+                modifier = Modifier.padding(top = 7.dp).size(30.dp).clickable(enabled = order.status != OrderStatus.Completed, onClick = onDelete),
                 shape = MaterialTheme.shapes.small,
                 color = CustomTheme.colors.error.copy(alpha = .88f)
             ) {
@@ -501,6 +587,15 @@ private fun OrderCard(order: Order, onClick: (String) -> Unit, onSupplyClick: (S
         OrderCardValue("Полная цена", money(order.total), Modifier.weight(1f))
         OrderCardValue("Срок годности", "Срок не определён", Modifier.weight(1.4f))
     }
+    if (order.status != OrderStatus.Completed) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(onClick = { onEdit(order.id) }, modifier = Modifier.weight(1f)) { Text("Изменить") }
+            Button(onClick = onComplete, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.Check, null, Modifier.size(18.dp)); Text("Завершить", Modifier.padding(start = 5.dp)) }
+        }
+    }
 }
 
 @Composable
@@ -523,8 +618,15 @@ private fun OrderDetailsInfo(order: Order) = StoqCard(Modifier.fillMaxWidth()) {
     }
     HorizontalDivider(Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
     InfoLine(if (order.type == OrderType.DineIn) Icons.Outlined.TableRestaurant else Icons.Outlined.LocalShipping, order.location)
-    InfoLine(Icons.Outlined.PersonOutline, order.customer)
+    if (order.guests != null) InfoLine(Icons.Outlined.PeopleOutline, "${order.guests} ${guestsLabel(order.guests)}")
+    else InfoLine(Icons.Outlined.PersonOutline, order.customer)
     Text(if (order.type == OrderType.DineIn) "Заказ в зале" else "Заказ с доставкой", modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.primaryDark)
+}
+
+private fun guestsLabel(count: Int) = when {
+    count % 10 == 1 && count % 100 != 11 -> "гость"
+    count % 10 in 2..4 && count % 100 !in 12..14 -> "гостя"
+    else -> "гостей"
 }
 
 @Composable
@@ -729,22 +831,42 @@ private fun guestOrderQrBitmap(link: String): Bitmap {
 private fun AvailabilityBanner() = Surface(Modifier.fillMaxWidth(), color = CustomTheme.colors.primary.copy(alpha = .12f), shape = MaterialTheme.shapes.medium) { Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(38.dp).clip(CircleShape).background(CustomTheme.colors.success), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Check, null, tint = MaterialTheme.colorScheme.surface) }; Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("Автоматическая проверка доступности", style = MaterialTheme.typography.labelLarge); Text("Система проверяет наличие всех ингредиентов для каждого блюда в реальном времени.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
 
 @Composable
-private fun BasketItem(item: OrderItem, action: (OrdersAction) -> Unit) = StoqCard(Modifier.fillMaxWidth(), PaddingValues(10.dp)) {
-    Row(verticalAlignment = Alignment.Top) {
-        DishImage(item, 70.dp); Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Row { Column(Modifier.weight(1f)) { Text(item.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis); Text(item.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; StoqStatusPill(item.availability.label(), item.availability.tone()) }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) { QuantityControl(item.quantity, { action(OrdersAction.ChangeQuantity(item.dishId, -1)) }, { action(OrdersAction.ChangeQuantity(item.dishId, 1)) }); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(money(item.price), style = MaterialTheme.typography.labelLarge); Text("Цена за ед.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Column(horizontalAlignment = Alignment.End) { Text(money(item.price * item.quantity), style = MaterialTheme.typography.titleMedium); Text("Сумма", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Icon(Icons.Outlined.DeleteOutline, "Удалить", Modifier.padding(start = 8.dp).size(25.dp).clickable { action(OrdersAction.Remove(item.dishId)) }, tint = CustomTheme.colors.error) }
+private fun BasketItem(item: OrderItem, action: (OrdersAction) -> Unit) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    StoqCard(Modifier.fillMaxWidth(), PaddingValues(10.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            DishImage(item, 70.dp); Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Row { Column(Modifier.weight(1f)) { Text(item.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis); Text(item.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; StoqStatusPill(item.availability.label(), item.availability.tone()) }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) { QuantityControl(item.quantity, { action(OrdersAction.ChangeQuantity(item.dishId, -1)) }, { action(OrdersAction.ChangeQuantity(item.dishId, 1)) }); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(money(item.price), style = MaterialTheme.typography.labelLarge); Text("Цена за ед.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Column(horizontalAlignment = Alignment.End) { Text(money(item.price * item.quantity), style = MaterialTheme.typography.titleMedium); Text("Сумма", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Icon(Icons.Outlined.DeleteOutline, "Удалить", Modifier.padding(start = 8.dp).size(25.dp).clickable { showDeleteDialog = true }, tint = CustomTheme.colors.error) }
+            }
         }
+        item.unavailableIngredient?.let { ErrorBanner("Нет ингредиентов", it) }
     }
-    item.unavailableIngredient?.let { ErrorBanner("Нет ингредиентов", it) }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Удалить блюдо из заказа?") },
+            text = { Text("${item.name} будет удалено из текущего заказа.") },
+            confirmButton = { Button(onClick = { showDeleteDialog = false; action(OrdersAction.Remove(item.dishId)) }) { Text("Удалить") } },
+            dismissButton = { OutlinedButton(onClick = { showDeleteDialog = false }) { Text("Отмена") } }
+        )
+    }
 }
 
 @Composable
 private fun QuantityControl(quantity: Int, onMinus: () -> Unit, onPlus: () -> Unit) = Surface(shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Remove, "Уменьшить", Modifier.size(34.dp).padding(7.dp).clickable(onClick = onMinus)); Text(quantity.toString(), Modifier.padding(horizontal = 7.dp), style = MaterialTheme.typography.labelLarge); Icon(Icons.Outlined.Add, "Увеличить", Modifier.size(34.dp).padding(7.dp).clickable(onClick = onPlus)) } }
 
 @Composable
-private fun OrderSummary(state: OrdersState) = Surface(Modifier.fillMaxWidth(), color = CustomTheme.colors.primary.copy(alpha = .14f), shape = MaterialTheme.shapes.medium) { Row(Modifier.padding(15.dp), horizontalArrangement = Arrangement.SpaceAround) { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.LocalDining, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(9.dp)); SummaryValue("Всего позиций", state.basket.sumOf { it.quantity }.toString()) }; Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Refresh, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(9.dp)); SummaryValue("Общая сумма заказа", money(state.basket.sumOf { it.price * it.quantity })) } } }
+private fun OrderSummary(state: OrdersState) = Surface(Modifier.fillMaxWidth(), color = CustomTheme.colors.primary.copy(alpha = .14f), shape = MaterialTheme.shapes.medium) {
+    val existingOrder = state.editingOrder
+    val positions = (existingOrder?.positions ?: 0) + state.basket.sumOf { it.quantity }
+    val total = (existingOrder?.total ?: 0) + state.basket.sumOf { it.price * it.quantity }
+    Row(Modifier.padding(15.dp), horizontalArrangement = Arrangement.SpaceAround) {
+        Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.LocalDining, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(9.dp)); SummaryValue("Всего позиций", positions.toString()) }
+        Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Refresh, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(9.dp)); SummaryValue("Общая сумма заказа", money(total)) }
+    }
+}
 
 @Composable
 private fun SummaryValue(label: String, value: String) = Column { Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value, style = MaterialTheme.typography.titleLarge) }
@@ -756,15 +878,23 @@ private fun ErrorBanner(title: String, text: String) = Surface(Modifier.fillMaxW
 private fun CreateActions(state: OrdersState, action: (OrdersAction) -> Unit, onSave: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onSave, Modifier.weight(1f).height(52.dp), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Text("Сохранить") }
-        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && !state.isCreating && state.error == null, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Создание…" else "Создать заказ  →") }
+        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && !state.isCreating && state.error == null, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Сохранение…" else if (state.editingOrderId != null) "Добавить блюда  →" else "Создать заказ  →") }
     }
 }
 
 @Composable
-private fun CreatedBanner(onBack: () -> Unit) = Surface(Modifier.fillMaxWidth(), color = CustomTheme.colors.primary.copy(alpha = .14f), shape = MaterialTheme.shapes.medium) { Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) { Box(Modifier.size(42.dp).clip(CircleShape).background(CustomTheme.colors.success), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Check, null, tint = MaterialTheme.colorScheme.surface) }; Text("Заказ создан", modifier = Modifier.padding(top = 10.dp), style = MaterialTheme.typography.titleLarge); Text("Заказ отправлен в обработку", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Button(onBack, Modifier.padding(top = 12.dp), colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text("К списку заказов") } } }
+private fun CreatedBanner(updated: Boolean, onBack: () -> Unit) = Surface(Modifier.fillMaxWidth(), color = CustomTheme.colors.primary.copy(alpha = .14f), shape = MaterialTheme.shapes.medium) { Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) { Box(Modifier.size(42.dp).clip(CircleShape).background(CustomTheme.colors.success), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Check, null, tint = MaterialTheme.colorScheme.surface) }; Text(if (updated) "Заказ обновлён" else "Заказ создан", modifier = Modifier.padding(top = 10.dp), style = MaterialTheme.typography.titleLarge); Text(if (updated) "Новые блюда добавлены в заказ" else "Заказ отправлен в обработку", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Button(onBack, Modifier.padding(top = 12.dp), colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text("К списку заказов") } } }
 
 @Composable
 private fun EmptyBasket() = Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceVariant) { Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Outlined.LocalDining, null, tint = MaterialTheme.colorScheme.onSurfaceVariant); Text("Добавьте блюда в заказ", modifier = Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+
+@Composable
+private fun EditOrderHint() = Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceVariant) {
+    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Add, null, tint = CustomTheme.colors.primaryDark)
+        Text("Выберите блюда через поиск, чтобы добавить их в заказ.", modifier = Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
 
 @Composable
 private fun DishImage(item: OrderItem, size: androidx.compose.ui.unit.Dp) = bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage(

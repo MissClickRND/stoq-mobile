@@ -65,6 +65,9 @@ private data class DishCollectionDestination(val recommended: Boolean)
 private data class CreateOrderDestination(val draftId: String? = null)
 
 @Serializable
+private data class EditOrderDestination(val orderId: String)
+
+@Serializable
 private data class CreateSupplyDestination(val draftId: String? = null)
 
 @Serializable
@@ -134,7 +137,11 @@ fun MainNavigation(user: AuthUser?) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(DashboardRoute) {
-                DashboardScreen()
+                DashboardScreen(
+                    onProductsClick = { navController.navigate(ProductsRoute) { launchSingleTop = true } },
+                    onDishesClick = { navController.navigate(DishesRoute) { launchSingleTop = true } },
+                    onOrdersClick = { navController.navigate(OrdersRoute) { launchSingleTop = true } }
+                )
             }
             composable(ProductsRoute) { entry ->
                 val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
@@ -194,6 +201,7 @@ fun MainNavigation(user: AuthUser?) {
                 OrdersScreen(
                     onCreateOrder = { navController.navigate(CreateOrderDestination()) },
                     onOrderClick = { navController.navigate(OrderDetailsDestination(it)) },
+                    onEditOrder = { navController.navigate(EditOrderDestination(it)) },
                     onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) },
                     onDraftsClick = { navController.navigate(DraftsDestination("order")) },
                     draftFeedback = draftFeedback,
@@ -210,6 +218,17 @@ fun MainNavigation(user: AuthUser?) {
                         }
                     },
                     draftId = entry.toRoute<CreateOrderDestination>().draftId
+                )
+            }
+            composable<EditOrderDestination> { entry ->
+                CreateOrderScreen(
+                    onBack = navController::popBackStack,
+                    onOrdersClick = {
+                        if (!navController.popBackStack(OrdersRoute, inclusive = false)) {
+                            navController.navigate(OrdersRoute) { launchSingleTop = true }
+                        }
+                    },
+                    editOrderId = entry.toRoute<EditOrderDestination>().orderId
                 )
             }
             composable<DraftsDestination> { entry ->
@@ -242,7 +261,8 @@ fun MainNavigation(user: AuthUser?) {
             composable<OrderDetailsDestination> { entry ->
                 OrderDetailsScreen(
                     orderId = entry.toRoute<OrderDetailsDestination>().orderId,
-                    onBack = navController::popBackStack
+                    onBack = navController::popBackStack,
+                    onEditOrder = { navController.navigate(EditOrderDestination(it)) }
                 )
             }
             composable(DishesRoute) {
@@ -255,7 +275,8 @@ fun MainNavigation(user: AuthUser?) {
             composable<DishDetailsDestination> { entry ->
                 DishDetailsScreen(
                     id = entry.toRoute<DishDetailsDestination>().dishId,
-                    onBack = navController::popBackStack
+                    onBack = navController::popBackStack,
+                    onStorageClick = { navController.navigate(ProductsRoute) { launchSingleTop = true } }
                 )
             }
             composable<DishCollectionDestination> { entry ->

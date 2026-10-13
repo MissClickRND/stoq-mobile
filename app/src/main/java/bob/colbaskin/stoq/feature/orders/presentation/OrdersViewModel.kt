@@ -48,7 +48,12 @@ data class OrdersState(
     val error: String? = null,
     val isCreating: Boolean = false,
     val drafts: List<Draft> = emptyList(),
-    val draftId: String? = null
+    val draftId: String? = null,
+    val editingOrderId: String? = null,
+    val existingDishIds: Set<String> = emptySet(),
+    val editingOrder: Order? = null,
+    val editLoadState: UiState<Unit>? = null,
+    val isRefreshing: Boolean = false
 )
 
 @Serializable
@@ -57,7 +62,9 @@ private data class OrderDraftPayload(
     val orderType: String,
     val table: String,
     val guests: String,
-    val items: List<OrderDraftItem>
+    val items: List<OrderDraftItem>,
+    val editingOrderId: String? = null,
+    val existingDishIds: List<String> = emptyList()
 )
 
 @Serializable
@@ -82,6 +89,55 @@ class OrdersViewModel @Inject constructor(
     }
 
     fun reload() = refresh()
+
+    fun startEditing(id: String) = viewModelScope.launch {
+        _state.update { it.copy(editLoadState = UiState.Loading, error = null) }
+        when (val result = repository.order(id)) {
+            is UiState.Success -> {
+                val order = result.data
+                _state.update {
+                    it.copy(
+                        editingOrderId = order.id,
+                        editingOrder = order,
+                        existingDishIds = order.items.map(OrderItem::dishId).toSet(),
+                        basket = emptyList(),
+                        menuQuery = "",
+                        menu = it.allMenu,
+                        orderType = if (order.type == bob.colbaskin.stoq.feature.orders.domain.model.OrderType.Delivery) "Доставка" else "В зале",
+                        table = order.location.takeIf { value -> value.startsWith("Стол") }.orEmpty(),
+                        guests = order.guests?.toString().orEmpty(),
+                        hasUnsavedChanges = false,
+                        error = null,
+                        editLoadState = UiState.Success(Unit)
+                    )
+                }
+            }
+            is UiState.Error -> _state.update { it.copy(error = result.text, editLoadState = result) }
+            UiState.Loading -> Unit
+        }
+    }
+
+    fun complete(id: String) = viewModelScope.launch {
+        when (val result = repository.complete(id)) {
+            is UiState.Success -> _state.update { state ->
+                val orders = state.orders.map { if (it.id == id) result.data else it }
+                state.copy(orders = orders, metrics = repository.metrics(orders), error = null)
+            }
+            is UiState.Error -> _state.update { it.copy(error = result.text) }
+            UiState.Loading -> Unit
+        }
+    }
+
+    fun delete(id: String) = viewModelScope.launch {
+        when (val result = repository.delete(id)) {
+            is UiState.Success -> _state.update { state ->
+                val orders = state.orders.filterNot { it.id == id }
+                state.copy(orders = orders, metrics = repository.metrics(orders), error = null)
+            }
+            is UiState.Error -> _state.update { it.copy(error = result.text) }
+            UiState.Loading -> Unit
+        }
+    }
 
     fun onAction(action: OrdersAction) {
         when (action) {
@@ -114,20 +170,24 @@ class OrdersViewModel @Inject constructor(
     }
 
     private fun refresh() = viewModelScope.launch {
-        _state.update { it.copy(loadState = UiState.Loading) }
+        val hasData = _state.value.orders.isNotEmpty()
+        _state.update { if (hasData) it.copy(isRefreshing = true) else it.copy(loadState = UiState.Loading) }
         val orders = repository.orders()
         val menu = repository.menu()
         when {
             orders is UiState.Success && menu is UiState.Success -> _state.update {
-                it.copy(orders = orders.data, menu = menu.data, allMenu = menu.data, metrics = repository.metrics(orders.data), loadState = UiState.Success(Unit))
+                it.copy(orders = orders.data, menu = menu.data, allMenu = menu.data, metrics = repository.metrics(orders.data), loadState = UiState.Success(Unit), isRefreshing = false)
             }
-            orders is UiState.Error -> _state.update { it.copy(loadState = orders) }
-            menu is UiState.Error -> _state.update { it.copy(loadState = menu) }
-            else -> _state.update { it.copy(loadState = UiState.Error("Не удалось загрузить заказы", "Повторите попытку")) }
+            orders is UiState.Error -> _state.update { it.copy(loadState = if (hasData) it.loadState else orders, isRefreshing = false, error = if (hasData) orders.text else it.error) }
+            menu is UiState.Error -> _state.update { it.copy(loadState = if (hasData) it.loadState else menu, isRefreshing = false, error = if (hasData) menu.text else it.error) }
+            else -> _state.update { it.copy(loadState = if (hasData) it.loadState else UiState.Error("Не удалось загрузить заказы", "Повторите попытку"), isRefreshing = false) }
         }
     }
 
     private fun addDish(item: OrderItem) = _state.update { state ->
+        if (item.dishId in state.existingDishIds) {
+            return@update state.copy(error = "Это блюдо уже есть в заказе. Сервер пока не поддерживает изменение его количества.")
+        }
         val matching = state.basket.find { it.dishId == item.dishId }
         state.copy(
             basket = if (matching == null) state.basket + item else state.basket.map { if (it.dishId == item.dishId) it.copy(quantity = it.quantity + 1) else it },
@@ -159,7 +219,19 @@ class OrdersViewModel @Inject constructor(
         val basket = _state.value.basket
         if (basket.isEmpty()) return@launch
         _state.update { it.copy(isCreating = true, error = null) }
-        when (val result = repository.create(basket)) {
+        val state = _state.value
+        val result = if (state.editingOrderId == null) {
+            repository.create(
+                date = state.orderDate.toIsoOrderDateTime(),
+                type = if (state.orderType == "Доставка") "takeaway" else "dine-in",
+                table = state.table.filter(Char::isDigit).toIntOrNull(),
+                guests = state.guests.toIntOrNull()?.coerceAtLeast(1) ?: 1,
+                items = basket
+            )
+        } else {
+            repository.addItems(state.editingOrderId, basket)
+        }
+        when (result) {
             is UiState.Success -> {
                 val draftId = _state.value.draftId
                 _state.update {
@@ -188,7 +260,9 @@ class OrdersViewModel @Inject constructor(
                 basket = basket, orderDate = payload.orderDate, orderType = payload.orderType,
                 table = payload.table, guests = payload.guests, checked = basket.isNotEmpty(),
                 saved = true, hasUnsavedChanges = false, draftId = draft.id, error = null,
-                draftMessage = "Черновик восстановлен"
+                draftMessage = "Черновик восстановлен",
+                editingOrderId = payload.editingOrderId,
+                existingDishIds = payload.existingDishIds.toSet()
             )
         }
     }
@@ -205,7 +279,9 @@ class OrdersViewModel @Inject constructor(
         viewModelScope.launch {
             val payload = OrderDraftPayload(
                 orderDate = state.orderDate, orderType = state.orderType, table = state.table,
-                guests = state.guests, items = state.basket.map { OrderDraftItem(it.dishId, it.quantity) }
+                guests = state.guests, items = state.basket.map { OrderDraftItem(it.dishId, it.quantity) },
+                editingOrderId = state.editingOrderId,
+                existingDishIds = state.existingDishIds.toList()
             )
             val draft = draftsRepository.save(
                 type = DraftType.Order,
@@ -227,7 +303,7 @@ class OrdersViewModel @Inject constructor(
 
     private fun clearDraftAndReset() {
         val draftId = _state.value.draftId
-        _state.update { it.copy(created = false, basket = emptyList(), checked = false, saved = false, hasUnsavedChanges = false, error = null, draftId = null) }
+        _state.update { it.copy(created = false, basket = emptyList(), checked = false, saved = false, hasUnsavedChanges = false, error = null, draftId = null, editingOrderId = null, existingDishIds = emptySet(), editingOrder = null, editLoadState = null) }
         draftId?.let { id -> viewModelScope.launch { draftsRepository.delete(id) } }
     }
 
@@ -284,3 +360,11 @@ private fun currentDateTime(): String {
     val now = java.time.LocalDateTime.now()
     return "%02d.%02d.%d %02d:%02d".format(now.dayOfMonth, now.monthValue, now.year, now.hour, now.minute)
 }
+
+private fun String.toIsoOrderDateTime(): String = runCatching {
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+    java.time.LocalDateTime.parse(this, formatter)
+        .atZone(java.time.ZoneId.systemDefault())
+        .toInstant()
+        .toString()
+}.getOrElse { java.time.Instant.now().toString() }

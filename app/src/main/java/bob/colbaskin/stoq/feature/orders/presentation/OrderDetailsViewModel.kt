@@ -32,4 +32,9 @@ class OrderDetailsViewModel @Inject constructor(
             UiState.Loading -> Unit
         }
     }
+
+    fun complete(id: String) = viewModelScope.launch {
+        _state.update { UiState.Loading }
+        _state.update { repository.complete(id) }
+    }
 }
