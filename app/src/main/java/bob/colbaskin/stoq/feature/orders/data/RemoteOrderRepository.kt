@@ -6,6 +6,7 @@ import bob.colbaskin.stoq.common.network.safeApiCall
 import bob.colbaskin.stoq.feature.dishes.data.model.DishDto
 import bob.colbaskin.stoq.feature.dishes.data.remote.DishesApiService
 import bob.colbaskin.stoq.feature.orders.data.model.AddOrderItemsDto
+import bob.colbaskin.stoq.feature.orders.data.model.CreateOrderDto
 import bob.colbaskin.stoq.feature.orders.data.model.OrderDto
 import bob.colbaskin.stoq.feature.orders.data.model.OrderItemDto
 import bob.colbaskin.stoq.feature.orders.data.remote.OrdersApiService
@@ -40,17 +41,16 @@ class RemoteOrderRepository @Inject constructor(
         successHandler = { it }
     ).toUiState()
 
-    override suspend fun menu(): UiState<List<OrderItem>> = safeApiCall(
-        apiCall = dishesApi::getDishes,
+    override suspend fun menu(search: String?): UiState<List<OrderItem>> = safeApiCall(
+        apiCall = { dishesApi.getDishes(search?.trim()?.takeIf(String::isNotBlank)) },
         successHandler = { dishes -> dishes.filterNot(DishDto::isDeleted).map(DishDto::toOrderItem) }
     ).toUiState()
 
     override suspend fun create(items: List<OrderItem>): UiState<Order> = safeApiCall(
         apiCall = {
-            val order = ordersApi.createOrder()
-            ordersApi.addOrderItems(order.id, AddOrderItemsDto(items.map { OrderItemDto(dishId = it.dishId.toLong(), quantity = it.quantity) }))
+            val order = ordersApi.createOrder(CreateOrderDto(items.map { OrderItemDto(dishId = it.dishId.toLong(), quantity = it.quantity) }))
             val dishes = dishesApi.getDishes().associateBy(DishDto::id)
-            ordersApi.getOrder(order.id).toOrder(dishes)
+            order.toOrder(dishes)
         },
         successHandler = { it }
     ).toUiState()

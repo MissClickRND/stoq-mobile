@@ -13,8 +13,8 @@ import javax.inject.Singleton
 
 @Singleton
 class RemoteProductRepository @Inject constructor(private val api: ProductsApiService) {
-    suspend fun getProducts(): UiState<List<ProductDto>> = safeApiCall(
-        apiCall = api::getProducts,
+    suspend fun getProducts(search: String? = null): UiState<List<ProductDto>> = safeApiCall(
+        apiCall = { api.getProducts(search?.trim()?.takeIf(String::isNotBlank)) },
         successHandler = { products -> products.filterNot(ProductDto::isDeleted) }
     ).toUiState()
 

@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -30,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
@@ -54,6 +56,7 @@ fun DishesScreen(
     onRecommendationsClick: () -> Unit,
     viewModel: DishesViewModel = hiltViewModel()
 ) {
+    RefreshOnResume(viewModel::refresh)
     val state = viewModel.state
     val colors = LocalColors.current
     val allDishes = viewModel.allDishes
@@ -74,7 +77,7 @@ fun DishesScreen(
             Text("Блюда", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary)
             Text("Управляйте меню, составами и себестоимостью блюд", color = colors.textSecondary, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(StoqSpacing.Large))
-            SearchBar(state.query, viewModel::updateQuery)
+            SearchBar(state.query, state.dishes, viewModel::updateQuery, onDishClick)
             Spacer(Modifier.height(StoqSpacing.Medium))
             DishSummary(allDishes)
             Spacer(Modifier.height(StoqSpacing.Medium))
@@ -327,9 +330,61 @@ private fun FeatureLinkCard(
     }
 }
 
-@Composable private fun SearchBar(query: String, onQueryChanged: (String) -> Unit) {
+@Composable private fun SearchBar(
+    query: String,
+    dishes: List<Dish>,
+    onQueryChanged: (String) -> Unit,
+    onDishClick: (String) -> Unit
+) {
     val colors = LocalColors.current
-    TextField(value = query, onValueChange = onQueryChanged, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Поиск блюд, ингредиентов или категории...", maxLines = 1) }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = MaterialTheme.shapes.medium, singleLine = true, colors = TextFieldDefaults.colors(focusedContainerColor = colors.surface, unfocusedContainerColor = colors.surface, focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent))
+    var focused by remember { mutableStateOf(false) }
+    Column {
+        TextField(
+            value = query,
+            onValueChange = onQueryChanged,
+            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+            placeholder = { Text("Поиск блюд, ингредиентов или категории...", maxLines = 1) },
+            leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            shape = MaterialTheme.shapes.medium,
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = colors.surface,
+                unfocusedContainerColor = colors.surface,
+                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+            )
+        )
+        if (focused) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.ExtraSmall),
+                verticalArrangement = Arrangement.spacedBy(StoqSpacing.ExtraSmall)
+            ) {
+                dishes.take(5).forEach { dish ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { onDishClick(dish.id) },
+                        shape = MaterialTheme.shapes.small,
+                        color = colors.surface,
+                        border = BorderStroke(1.dp, colors.outline.copy(alpha = .55f))
+                    ) {
+                        Row(Modifier.padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            StoqAsyncImage(
+                                imageUrl = dish.imageUrl,
+                                contentDescription = dish.name,
+                                modifier = Modifier.size(52.dp).clip(MaterialTheme.shapes.small),
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(Modifier.width(9.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(dish.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(dish.category, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                            }
+                            Text("${dish.price} ₽", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable private fun DishSummary(dishes: List<Dish>) {

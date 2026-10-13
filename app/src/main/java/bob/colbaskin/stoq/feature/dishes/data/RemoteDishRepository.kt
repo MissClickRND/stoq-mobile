@@ -16,9 +16,9 @@ import javax.inject.Singleton
 class RemoteDishRepository @Inject constructor(
     private val api: DishesApiService
 ) {
-    suspend fun getDishes(): UiState<List<Dish>> = safeApiCall(
-        apiCall = api::getDishes,
-        successHandler = { items -> items.filterNot(DishDto::isDeleted).map(DishDto::toDish) }
+    suspend fun getDishes(search: String? = null): UiState<List<Dish>> = safeApiCall(
+        apiCall = { api.getDishes(search?.trim()?.takeIf(String::isNotBlank)) },
+        successHandler = { items -> items.filterNot(DishDto::isDeleted).map(DishDto::toDish).distinctBy(Dish::id) }
     ).toUiState()
 
     suspend fun getDish(id: Long): UiState<Dish> = safeApiCall(

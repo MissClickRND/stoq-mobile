@@ -3,6 +3,7 @@ package bob.colbaskin.stoq.feature.orders.presentation
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
@@ -74,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -82,6 +84,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
@@ -90,7 +93,11 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
+import bob.colbaskin.stoq.common.drafts.presentation.UnsavedChangesDialog
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.R
@@ -99,7 +106,6 @@ import bob.colbaskin.stoq.feature.orders.domain.model.Order
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderItem
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderStatus
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderType
-import coil.compose.AsyncImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -112,8 +118,12 @@ fun OrdersScreen(
     onCreateOrder: () -> Unit,
     onOrderClick: (String) -> Unit,
     onSupplyClick: (String) -> Unit,
+    onDraftsClick: () -> Unit,
+    draftFeedback: String? = null,
+    onDraftFeedbackShown: () -> Unit = {},
     viewModel: OrdersViewModel = hiltViewModel()
 ) {
+    RefreshOnResume(viewModel::reload)
     val state by viewModel.state.collectAsState()
     val orders = state.orders.filter { order ->
         val matchesText = state.query.isBlank() || (listOf(order.id, order.customer, order.location) + order.items.map { it.name }).any { it.contains(state.query, true) }
@@ -131,7 +141,8 @@ fun OrdersScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item { ScreenHeader("Заказы", "Отслеживайте и обрабатывайте заказы вашего ресторана") }
-                    item { OrderSearch(state.query) { viewModel.onAction(OrdersAction.Query(it)) } }
+                    item { DraftsBanner(state.drafts.size, "заказ") { onDraftsClick() } }
+                    item { OrderSearch(state.query, state.orders) { viewModel.onAction(OrdersAction.Query(it)) } }
                     item { MetricsGrid(state) }
                     item { Filters(state, viewModel::onAction) }
                     items(orders, key = { it.id }) { OrderCard(it, onOrderClick, onSupplyClick) }
@@ -146,22 +157,54 @@ fun OrdersScreen(
         }
         }
     }
+    DraftSnackbar(draftFeedback, onDraftFeedbackShown, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
-fun CreateOrderScreen(onBack: () -> Unit, viewModel: OrdersViewModel = hiltViewModel()) {
+fun CreateOrderScreen(
+    onBack: () -> Unit,
+    onOrdersClick: () -> Unit,
+    draftId: String? = null,
+    viewModel: OrdersViewModel = hiltViewModel()
+) {
     val state by viewModel.state.collectAsState()
+    var restoredDraftId by remember { mutableStateOf<String?>(null) }
+    var showExitDialog by remember { mutableStateOf(false) }
+    val hasChanges = state.basket.isNotEmpty() && state.hasUnsavedChanges
+    LaunchedEffect(draftId, state.menu) {
+        if (draftId != null && restoredDraftId != draftId && state.menu.isNotEmpty()) {
+            restoredDraftId = draftId
+            viewModel.restoreDraft(draftId)
+        }
+    }
+    BackHandler(enabled = hasChanges) { showExitDialog = true }
     when (val loadState = state.loadState) {
         UiState.Loading -> LoadingScreen()
         is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::reload, onBack)
-        is UiState.Success -> CreateOrderContent(state, onBack, viewModel::onAction)
+        is UiState.Success -> CreateOrderContent(
+            state = state,
+            onBack = { if (hasChanges) showExitDialog = true else onBack() },
+            onOrdersClick = onOrdersClick,
+            onSaveAndReturn = { viewModel.saveDraft(onOrdersClick, showMessage = false, markClean = true) },
+            onAction = viewModel::onAction
+        )
     }
+    UnsavedChangesDialog(
+        visible = showExitDialog,
+        entityName = "создание заказа",
+        onDismiss = { showExitDialog = false },
+        onSaveAndExit = { showExitDialog = false; viewModel.saveDraft(onOrdersClick, showMessage = false, markClean = true) },
+        onDiscardAndExit = { showExitDialog = false; viewModel.discardDraft(onBack) }
+    )
+    DraftSnackbar(state.draftMessage, viewModel::consumeDraftMessage, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
 private fun CreateOrderContent(
     state: OrdersState,
     onBack: () -> Unit,
+    onOrdersClick: () -> Unit,
+    onSaveAndReturn: () -> Unit,
     onAction: (OrdersAction) -> Unit
 ) {
     val menu = state.menu.filter { state.menuQuery.isBlank() || it.name.contains(state.menuQuery, true) }
@@ -178,11 +221,11 @@ private fun CreateOrderContent(
         item { Text("Блюда в заказе", style = MaterialTheme.typography.titleLarge) }
         items(state.basket, key = { it.dishId }) { BasketItem(it, onAction) }
         if (state.created) {
-            item { CreatedBanner { onAction(OrdersAction.ResetCreation); onBack() } }
+            item { CreatedBanner { onAction(OrdersAction.ResetCreation); onOrdersClick() } }
         } else if (state.basket.isNotEmpty()) {
             if (state.checked && state.basket.any { it.availability == Availability.Unavailable }) item { ErrorBanner("Нельзя создать заказ", "1 блюдо недоступно") }
             state.error?.let { text -> item { ErrorBanner("Ошибка заказа", text) } }
-            item { CreateActions(state, onAction, onBack) }
+            item { CreateActions(state, onAction, onSaveAndReturn) }
         } else item { EmptyBasket() }
         item { Spacer(Modifier.height(22.dp)) }
     }
@@ -320,11 +363,53 @@ private fun GuestsField(value: String, enabled: Boolean, onChange: (String) -> U
 )
 
 @Composable
-private fun OrderSearch(value: String, onChange: (String) -> Unit) = OutlinedTextField(
-    value = value, onValueChange = onChange, modifier = Modifier.fillMaxWidth(), singleLine = true,
-    leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Поиск по номеру заказа, блюду, клиенту…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-    shape = MaterialTheme.shapes.medium, colors = fieldColors()
-)
+private fun OrderSearch(value: String, orders: List<Order>, onChange: (String) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val suggestions = orders.filter { order ->
+        value.isBlank() || (listOf(order.id, order.customer, order.location) + order.items.map { it.name })
+            .any { it.contains(value, ignoreCase = true) }
+    }
+    Column {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onChange,
+            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+            singleLine = true,
+            leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            placeholder = { Text("Поиск по номеру заказа, блюду, клиенту…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            shape = MaterialTheme.shapes.medium,
+            colors = fieldColors()
+        )
+        if (focused) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                suggestions.take(5).forEach { order ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable {
+                            onChange(order.id)
+                            focused = false
+                        },
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .55f))
+                    ) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.LocalDining, null, tint = CustomTheme.colors.primaryDark)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Заказ #${order.id}", style = MaterialTheme.typography.labelLarge)
+                                Text(order.items.joinToString { it.name }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Text(order.status.label(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun MetricsGrid(state: OrdersState) = Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -482,16 +567,34 @@ private fun EmptyOrderDetails() = Surface(Modifier.fillMaxWidth(), shape = Mater
 
 @Composable
 private fun DishPicker(query: String, dishes: List<OrderItem>, action: (OrdersAction) -> Unit, onGuestOrderQrClick: () -> Unit) = StoqCard(Modifier.fillMaxWidth()) {
+    var showSuggestions by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
     Text("Добавьте блюда в заказ", style = MaterialTheme.typography.titleLarge)
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(query, { action(OrdersAction.MenuQuery(it)) }, Modifier.weight(1f), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, trailingIcon = { if (query.isNotEmpty()) Icon(Icons.Outlined.Close, "Очистить", Modifier.clickable { action(OrdersAction.MenuQuery("")) }) }, placeholder = { Text("Поиск блюд") }, shape = MaterialTheme.shapes.medium, colors = fieldColors())
+        OutlinedTextField(
+            value = query,
+            onValueChange = { value ->
+                showSuggestions = true
+                action(OrdersAction.MenuQuery(value))
+            },
+            modifier = Modifier.weight(1f).onFocusChanged { focused ->
+                showSuggestions = focused.isFocused
+                if (focused.isFocused) action(OrdersAction.MenuQuery(query))
+            },
+            singleLine = true,
+            leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            trailingIcon = { if (query.isNotEmpty()) Icon(Icons.Outlined.Close, "Очистить", Modifier.clickable { action(OrdersAction.MenuQuery("")) }) },
+            placeholder = { Text("Поиск блюд") },
+            shape = MaterialTheme.shapes.medium,
+            colors = fieldColors()
+        )
         Surface(Modifier.height(56.dp).width(76.dp).clickable(onClick = onGuestOrderQrClick), shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.QrCodeScanner, "Гостевой заказ по QR", tint = CustomTheme.colors.primaryDark) } }
     }
-    if (query.isNotBlank()) {
+    if (showSuggestions) {
         Spacer(Modifier.height(8.dp))
         dishes.take(5).forEach { dish ->
-            Surface(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { action(OrdersAction.AddDish(dish)) }, color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) { Row(Modifier.padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) { DishImage(dish, 52.dp); Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(dish.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(dish.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Text(money(dish.price), style = MaterialTheme.typography.labelLarge) } }
+            Surface(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { showSuggestions = false; focusManager.clearFocus(); action(OrdersAction.AddDish(dish)) }, color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) { Row(Modifier.padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) { DishImage(dish, 52.dp); Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(dish.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(dish.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Text(money(dish.price), style = MaterialTheme.typography.labelLarge) } }
         }
     }
 }
@@ -650,10 +753,9 @@ private fun SummaryValue(label: String, value: String) = Column { Text(label, st
 private fun ErrorBanner(title: String, text: String) = Surface(Modifier.fillMaxWidth().padding(top = 8.dp), color = CustomTheme.colors.error.copy(alpha = .11f), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(28.dp).clip(CircleShape).background(CustomTheme.colors.error), contentAlignment = Alignment.Center) { Text("!", color = MaterialTheme.colorScheme.surface, style = MaterialTheme.typography.titleMedium) }; Spacer(Modifier.width(10.dp)); Text("$title: $text", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.error, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
 
 @Composable
-private fun CreateActions(state: OrdersState, action: (OrdersAction) -> Unit, onBack: () -> Unit) {
-    if (state.saved) Text("Черновик сохранён", style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.success)
+private fun CreateActions(state: OrdersState, action: (OrdersAction) -> Unit, onSave: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button({ action(OrdersAction.Save) }, Modifier.weight(1f).height(52.dp), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Text("Сохранить") }
+        Button(onSave, Modifier.weight(1f).height(52.dp), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Text("Сохранить") }
         Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && !state.isCreating && state.error == null, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Создание…" else "Создать заказ  →") }
     }
 }
@@ -665,7 +767,12 @@ private fun CreatedBanner(onBack: () -> Unit) = Surface(Modifier.fillMaxWidth(),
 private fun EmptyBasket() = Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceVariant) { Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Outlined.LocalDining, null, tint = MaterialTheme.colorScheme.onSurfaceVariant); Text("Добавьте блюда в заказ", modifier = Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
 
 @Composable
-private fun DishImage(item: OrderItem, size: androidx.compose.ui.unit.Dp) = AsyncImage(item.imageUrl, item.name, Modifier.size(size).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceVariant), contentScale = ContentScale.Crop)
+private fun DishImage(item: OrderItem, size: androidx.compose.ui.unit.Dp) = bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage(
+    imageUrl = item.imageUrl,
+    contentDescription = item.name,
+    modifier = Modifier.size(size).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.surfaceVariant),
+    contentScale = ContentScale.Crop
+)
 
 @Composable
 private fun StaticField(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, modifier: Modifier) = Surface(modifier.heightIn(min = 56.dp), shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), color = MaterialTheme.colorScheme.surface) { Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(8.dp)); Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 2) } }

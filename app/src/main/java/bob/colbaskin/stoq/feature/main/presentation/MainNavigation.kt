@@ -3,6 +3,7 @@ package bob.colbaskin.stoq.feature.main.presentation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
@@ -28,6 +29,11 @@ import bob.colbaskin.stoq.feature.orders.presentation.OrderDetailsScreen
 import bob.colbaskin.stoq.feature.admin.presentation.AdminScreen
 import bob.colbaskin.stoq.feature.inventory.presentation.InventoryScreen
 import bob.colbaskin.stoq.feature.profile.presentation.ProfileScreen
+import bob.colbaskin.stoq.common.drafts.data.DraftType
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsListScreen
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.LaunchedEffect
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ChartBar
 import compose.icons.tablericons.Package
@@ -56,7 +62,13 @@ private data class DishDetailsDestination(val dishId: String)
 private data class DishCollectionDestination(val recommended: Boolean)
 
 @Serializable
-private data object CreateOrderDestination
+private data class CreateOrderDestination(val draftId: String? = null)
+
+@Serializable
+private data class CreateSupplyDestination(val draftId: String? = null)
+
+@Serializable
+private data class DraftsDestination(val type: String, val excludeDraftId: String? = null)
 
 @Serializable
 private data class SupplyDetailsDestination(val supplyNumber: String)
@@ -65,7 +77,7 @@ private data class SupplyDetailsDestination(val supplyNumber: String)
 private data class OrderDetailsDestination(val orderId: String)
 
 @Serializable
-private data object InventoryDestination
+private data class InventoryDestination(val draftId: String? = null)
 
 @Serializable
 private data object ProfileDestination
@@ -84,6 +96,7 @@ fun MainNavigation(user: AuthUser?) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val showBottomBar = mainSections.any { it.route == currentRoute }
 
     Scaffold(
         topBar = {
@@ -94,23 +107,25 @@ fun MainNavigation(user: AuthUser?) {
             )
         },
         bottomBar = {
-            StoqBottomBar(
-                items = mainSections,
-                selectedRoute = currentRoute,
-                onItemSelected = { section ->
-                    if (section.route == currentRoute) {
-                        Unit
-                    } else if (navController.popBackStack(section.route, false)) {
-                        Unit
-                    } else {
-                        navController.navigate(section.route) {
-                            popUpTo(DashboardRoute) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+            if (showBottomBar) {
+                StoqBottomBar(
+                    items = mainSections,
+                    selectedRoute = currentRoute,
+                    onItemSelected = { section ->
+                        if (section.route == currentRoute) {
+                            Unit
+                        } else if (navController.popBackStack(section.route, false)) {
+                            Unit
+                        } else {
+                            navController.navigate(section.route) {
+                                popUpTo(DashboardRoute) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         NavHost(
@@ -121,23 +136,52 @@ fun MainNavigation(user: AuthUser?) {
             composable(DashboardRoute) {
                 DashboardScreen()
             }
-            composable(ProductsRoute) {
-                StorageScreen(onInventoryClick = { navController.navigate(InventoryDestination) })
+            composable(ProductsRoute) { entry ->
+                val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
+                StorageScreen(
+                    onInventoryClick = { navController.navigate(InventoryDestination()) },
+                    onInventoryDraftsClick = { navController.navigate(DraftsDestination("inventory")) },
+                    draftFeedback = draftFeedback,
+                    onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
+                )
             }
-            composable<InventoryDestination> {
-                InventoryScreen(onBack = navController::popBackStack)
+            composable<InventoryDestination> { entry ->
+                InventoryScreen(
+                    onBack = navController::popBackStack,
+                    onStorageClick = {
+                        navController.getBackStackEntry(ProductsRoute).savedStateHandle["draft_feedback"] = "Черновик сохранён"
+                        if (!navController.popBackStack(ProductsRoute, inclusive = false)) {
+                            navController.navigate(ProductsRoute) { launchSingleTop = true }
+                        }
+                    },
+                    draftId = entry.toRoute<InventoryDestination>().draftId,
+                    onDraftsClick = { activeDraftId -> navController.navigate(DraftsDestination("inventory", activeDraftId)) }
+                )
             }
             composable<ProfileDestination> {
                 user?.let { ProfileScreen(user = it, onBack = navController::popBackStack) }
             }
-            composable(SupplyRoute) {
+            composable(SupplyRoute) { entry ->
+                val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
                 SuppliesScreen(
-                    onCreateSupply = { navController.navigate("create_supply") },
-                    onSupplyClick = { supplyNumber -> navController.navigate(SupplyDetailsDestination(supplyNumber)) }
+                    onCreateSupply = { navController.navigate(CreateSupplyDestination()) },
+                    onSupplyClick = { supplyNumber -> navController.navigate(SupplyDetailsDestination(supplyNumber)) },
+                    onDraftsClick = { navController.navigate(DraftsDestination("supply")) },
+                    draftFeedback = draftFeedback,
+                    onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
                 )
             }
-            composable("create_supply") {
-                CreateSupplyScreen(onBack = { navController.popBackStack() })
+            composable<CreateSupplyDestination> { entry ->
+                CreateSupplyScreen(
+                    onBack = { navController.popBackStack() },
+                    onSuppliesClick = {
+                        navController.getBackStackEntry(SupplyRoute).savedStateHandle["draft_feedback"] = "Черновик сохранён"
+                        if (!navController.popBackStack(SupplyRoute, inclusive = false)) {
+                            navController.navigate(SupplyRoute) { launchSingleTop = true }
+                        }
+                    },
+                    draftId = entry.toRoute<CreateSupplyDestination>().draftId
+                )
             }
             composable<SupplyDetailsDestination> { entry ->
                 SupplyDetailsScreen(
@@ -145,15 +189,55 @@ fun MainNavigation(user: AuthUser?) {
                     onBack = navController::popBackStack
                 )
             }
-            composable(OrdersRoute) {
+            composable(OrdersRoute) { entry ->
+                val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
                 OrdersScreen(
-                    onCreateOrder = { navController.navigate(CreateOrderDestination) },
+                    onCreateOrder = { navController.navigate(CreateOrderDestination()) },
                     onOrderClick = { navController.navigate(OrderDetailsDestination(it)) },
-                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) }
+                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) },
+                    onDraftsClick = { navController.navigate(DraftsDestination("order")) },
+                    draftFeedback = draftFeedback,
+                    onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
                 )
             }
-            composable<CreateOrderDestination> {
-                CreateOrderScreen(onBack = { navController.popBackStack() })
+            composable<CreateOrderDestination> { entry ->
+                CreateOrderScreen(
+                    onBack = { navController.popBackStack() },
+                    onOrdersClick = {
+                        navController.getBackStackEntry(OrdersRoute).savedStateHandle["draft_feedback"] = "Черновик сохранён"
+                        if (!navController.popBackStack(OrdersRoute, inclusive = false)) {
+                            navController.navigate(OrdersRoute) { launchSingleTop = true }
+                        }
+                    },
+                    draftId = entry.toRoute<CreateOrderDestination>().draftId
+                )
+            }
+            composable<DraftsDestination> { entry ->
+                val destination = entry.toRoute<DraftsDestination>()
+                val type = when (destination.type) {
+                    "supply" -> DraftType.Supply
+                    "inventory" -> DraftType.Inventory
+                    else -> DraftType.Order
+                }
+                val draftsViewModel: DraftsViewModel = hiltViewModel()
+                LaunchedEffect(type) { draftsViewModel.load(type) }
+                DraftsListScreen(
+                    title = when (type) {
+                        DraftType.Supply -> "Черновики поставок"
+                        DraftType.Order -> "Черновики заказов"
+                        DraftType.Inventory -> "Черновики инвентаризаций"
+                    },
+                    drafts = draftsViewModel.drafts.filterNot { it.id == destination.excludeDraftId },
+                    onBack = { navController.popBackStack() },
+                    onOpen = { draft ->
+                        when (type) {
+                            DraftType.Supply -> navController.navigate(CreateSupplyDestination(draft.id))
+                            DraftType.Order -> navController.navigate(CreateOrderDestination(draft.id))
+                            DraftType.Inventory -> navController.navigate(InventoryDestination(draft.id))
+                        }
+                    },
+                    onDelete = draftsViewModel::delete
+                )
             }
             composable<OrderDetailsDestination> { entry ->
                 OrderDetailsScreen(

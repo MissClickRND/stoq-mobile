@@ -23,3 +23,6 @@ data class OrderItemDto(
 
 @Serializable
 data class AddOrderItemsDto(val items: List<OrderItemDto>)
+
+@Serializable
+data class CreateOrderDto(val items: List<OrderItemDto>)

@@ -49,18 +49,15 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +65,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
@@ -82,6 +82,7 @@ import compose.icons.tablericons.Package
 private enum class ProductStatus { Normal, LowStock, Expiring }
 
 private data class Product(
+    val stableId: String,
     val id: Long,
     val name: String,
     val article: String,
@@ -95,16 +96,16 @@ private data class Product(
 )
 
 @Composable
-fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hiltViewModel()) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+fun StorageScreen(
+    onInventoryClick: () -> Unit,
+    onInventoryDraftsClick: () -> Unit,
+    draftFeedback: String? = null,
+    onDraftFeedbackShown: () -> Unit = {},
+    viewModel: StorageViewModel = hiltViewModel()
+) {
+    RefreshOnResume(viewModel::refresh)
     var query by remember { mutableStateOf("") }
+    var searchFocused by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf("Все") }
     var showAddDialog by remember { mutableStateOf(false) }
     var productToDelete by remember { mutableStateOf<Product?>(null) }
@@ -131,7 +132,31 @@ fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hi
                 Text("Управляйте складской номенклатурой и контролируйте\nостатки продуктов", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textSecondary)
             }
         }
-        item { ProductSearchField(query, { query = it }) }
+        item {
+            Column {
+                ProductSearchField(
+                    value = query,
+                    onValueChange = {
+                        query = it
+                        viewModel.searchProducts(it)
+                    },
+                    onFocusChanged = { focused ->
+                        searchFocused = focused
+                        if (focused) viewModel.searchProducts(query)
+                    }
+                )
+                if (searchFocused) {
+                    ProductSearchSuggestions(
+                        products = filteredProducts,
+                        onSelected = { product ->
+                            query = product.name
+                            searchFocused = false
+                        }
+                    )
+                }
+            }
+        }
+        item { DraftsBanner(viewModel.inventoryDrafts.size, "инвентаризация", onInventoryDraftsClick) }
         item { ProductMetrics(catalogProducts) }
         item { StoqPrimaryButton(text = "Провести инвентаризацию", onClick = onInventoryClick) }
         item {
@@ -145,7 +170,7 @@ fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hi
             }
         }
         item { ExpiryBanner() }
-        items(filteredProducts, key = { it.article }) { product -> ProductCard(product) { productToDelete = product } }
+        items(filteredProducts, key = Product::stableId) { product -> ProductCard(product) { productToDelete = product } }
     }
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
     when (inventoryState) {
@@ -177,6 +202,7 @@ fun StorageScreen(onInventoryClick: () -> Unit, viewModel: StorageViewModel = hi
             dismissButton = { androidx.compose.material3.TextButton(onClick = { productToDelete = null }) { Text("Отмена") } }
         )
     }
+    DraftSnackbar(draftFeedback, onDraftFeedbackShown, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
@@ -264,11 +290,15 @@ private fun AddProductDialog(
 }
 
 @Composable
-private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
+private fun ProductSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onFocusChanged: (Boolean) -> Unit
+) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp).onFocusChanged { onFocusChanged(it.isFocused) },
             placeholder = { Text("Поиск продуктов, категорий или артикулов...", maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = CustomTheme.colors.textSecondary) },
             singleLine = true,
@@ -280,6 +310,32 @@ private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
                 unfocusedContainerColor = CustomTheme.colors.surface
             )
         )
+}
+
+@Composable
+private fun ProductSearchSuggestions(products: List<Product>, onSelected: (Product) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        products.take(5).forEach { product ->
+            Surface(
+                modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { onSelected(product) },
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .55f))
+            ) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Inventory2, null, tint = CustomTheme.colors.primaryDark)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(product.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(product.currentStock, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -408,6 +464,7 @@ private fun ProductCard(product: Product, onDelete: () -> Unit) {
 }
 
 private fun StorageProduct.toProduct() = Product(
+    stableId = batchId.toString(),
     id = id,
     name = name,
     article = id.toString(),

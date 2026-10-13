@@ -13,6 +13,8 @@ import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
 import bob.colbaskin.stoq.feature.products.data.RemoteProductRepository
 import bob.colbaskin.stoq.feature.products.data.model.ProductDto
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -45,6 +47,7 @@ class DishesViewModel @Inject constructor(
         private set
     private var stopListFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Любая причина"))
     private var recommendationsFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Срочность"))
+    private var searchJob: Job? = null
 
     init {
         refresh()
@@ -66,6 +69,21 @@ class DishesViewModel @Inject constructor(
     fun updateQuery(query: String) {
         val updated = state.copy(query = query)
         state = updated.copy(dishes = updated.filtered())
+        searchDishes(query)
+    }
+
+    private fun searchDishes(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(250)
+            when (val result = repository.getDishes(query)) {
+                is UiState.Success -> {
+                    if (query.isBlank()) allDishes = result.data
+                    state = state.copy(dishes = state.filtered(result.data))
+                }
+                else -> Unit
+            }
+        }
     }
 
     fun selectCategory(category: String) {
