@@ -148,6 +148,7 @@ fun MainNavigation(user: AuthUser?) {
                 StorageScreen(
                     onInventoryClick = { navController.navigate(InventoryDestination()) },
                     onInventoryDraftsClick = { navController.navigate(DraftsDestination("inventory")) },
+                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) },
                     draftFeedback = draftFeedback,
                     onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
                 )
@@ -202,7 +203,6 @@ fun MainNavigation(user: AuthUser?) {
                     onCreateOrder = { navController.navigate(CreateOrderDestination()) },
                     onOrderClick = { navController.navigate(OrderDetailsDestination(it)) },
                     onEditOrder = { navController.navigate(EditOrderDestination(it)) },
-                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) },
                     onDraftsClick = { navController.navigate(DraftsDestination("order")) },
                     draftFeedback = draftFeedback,
                     onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }

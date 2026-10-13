@@ -13,13 +13,15 @@ import javax.inject.Singleton
 data class StorageProduct(
     val id: Long,
     val batchId: Long,
+    val supplyId: Long?,
     val name: String,
     val availableQuantity: Double,
     val unit: String,
     val currentStock: String,
     val expiryDate: String?,
     val price: Double?,
-    val totalPrice: Double?
+    val totalPrice: Double?,
+    val status: String?
 )
 
 @Singleton
@@ -56,13 +58,15 @@ private fun InventoryDto.toStorageProduct(): StorageProduct? {
     return StorageProduct(
         id = product.id,
         batchId = id,
+        supplyId = supplyId,
         name = product.name,
         availableQuantity = quantity,
         unit = unit,
         currentStock = listOf(quantity.toDisplayQuantity(), unit).filter(String::isNotBlank).joinToString(" "),
         expiryDate = expiresAt?.take(10),
         price = price,
-        totalPrice = totalPrice
+        totalPrice = totalPrice,
+        status = status
     )
 }
 
