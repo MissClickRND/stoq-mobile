@@ -1,6 +1,7 @@
 package bob.colbaskin.stoq.feature.inventory.presentation
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,6 +49,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +60,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -74,14 +80,33 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
+import bob.colbaskin.stoq.common.drafts.presentation.UnsavedChangesDialog
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 
 @Composable
 fun InventoryScreen(
     onBack: () -> Unit,
+    onStorageClick: () -> Unit,
+    onDraftsClick: (String?) -> Unit,
+    draftId: String? = null,
     viewModel: InventoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val colors = LocalColors.current
+    var restoredDraftId by remember { mutableStateOf<String?>(null) }
+    var showExitDialog by remember { mutableStateOf(false) }
+    val hasChanges = state.hasDraftableProgress && state.hasUnsavedChanges && state.step != InventoryStep.Report
+    val savedDraftsCount = viewModel.drafts.count { it.id != viewModel.activeDraftId }
+
+    LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(draftId, state.lines) {
+        if (draftId != null && restoredDraftId != draftId && state.lines.isNotEmpty()) {
+            restoredDraftId = draftId
+            viewModel.restoreDraft(draftId)
+        }
+    }
+    BackHandler(enabled = hasChanges) { showExitDialog = true }
 
     Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
@@ -89,17 +114,15 @@ fun InventoryScreen(
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = StoqSpacing.Medium),
         verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)
     ) {
-        item { InventoryHeader(state.step, onBack) }
+        item { InventoryHeader(state.step) { if (hasChanges) showExitDialog = true else onBack() } }
         item { InventoryProgress(state.step) }
-        state.notice?.let { notice ->
-            item {
-                Surface(color = colors.primary.copy(alpha = 0.14f), shape = MaterialTheme.shapes.small) {
-                    Text(notice, Modifier.padding(horizontal = StoqSpacing.Large, vertical = StoqSpacing.Medium), style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
-                }
-            }
-        }
+        item { DraftsBanner(savedDraftsCount, "инвентаризация") { onDraftsClick(viewModel.activeDraftId) } }
         when (state.step) {
-            InventoryStep.Checking -> checkingContent(state, viewModel::onAction)
+            InventoryStep.Checking -> checkingContent(
+                state = state,
+                onAction = viewModel::onAction,
+                onSaveAndReturn = { viewModel.saveDraft(onStorageClick, showNotice = false, markClean = true) }
+            )
             InventoryStep.Confirmation -> confirmationContent(state, viewModel::onAction)
             InventoryStep.Report -> reportContent(state, viewModel::onAction)
         }
@@ -111,6 +134,14 @@ fun InventoryScreen(
     }
     if (state.isApplying) LoadingScreen()
     }
+    UnsavedChangesDialog(
+        visible = showExitDialog,
+        entityName = "инвентаризацию",
+        onDismiss = { showExitDialog = false },
+        onSaveAndExit = { showExitDialog = false; viewModel.saveDraft(onStorageClick, showNotice = false, markClean = true) },
+        onDiscardAndExit = { showExitDialog = false; viewModel.discardDraft(onBack) }
+    )
+    DraftSnackbar(state.notice, { viewModel.onAction(InventoryAction.NoticeDismissed) }, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
@@ -167,7 +198,8 @@ private fun InventoryProgress(step: InventoryStep) {
 
 private fun androidx.compose.foundation.lazy.LazyListScope.checkingContent(
     state: InventoryState,
-    onAction: (InventoryAction) -> Unit
+    onAction: (InventoryAction) -> Unit,
+    onSaveAndReturn: () -> Unit
 ) {
     val products = state.lines.filter { line ->
         state.query.isBlank() || listOf(line.product.name, line.product.article, line.product.category).any { it.contains(state.query, ignoreCase = true) }
@@ -193,12 +225,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.checkingContent(
     if (products.isEmpty()) {
         item { InventoryEmptyState() }
     } else {
-        items(products, key = { it.product.id }) { line ->
+        items(products, key = { it.product.batchId }) { line ->
             InventoryProductCard(
                 line = line,
-                onQuantityChanged = { onAction(InventoryAction.QuantityChanged(line.product.id, it)) },
-                onChecked = { onAction(InventoryAction.ProductChecked(line.product.id)) },
-                onWriteOff = { onAction(InventoryAction.QuantityChanged(line.product.id, 0.0)) }
+                onQuantityChanged = { onAction(InventoryAction.QuantityChanged(line.product.batchId, it)) },
+                onChecked = { onAction(InventoryAction.ProductChecked(line.product.batchId)) },
+                onWriteOff = { onAction(InventoryAction.QuantityChanged(line.product.batchId, 0.0)) }
             )
         }
     }
@@ -206,7 +238,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.checkingContent(
         InventoryActions(
             checked = state.checkedLines,
             total = state.lines.size,
-            onSave = { onAction(InventoryAction.SaveDraft) },
+            onSave = onSaveAndReturn,
             onProceed = { onAction(InventoryAction.ProceedToConfirmation) }
         )
     }
@@ -281,41 +313,59 @@ private fun EditableActualQuantity(
     var editing by remember { mutableStateOf(false) }
     var value by remember(quantity) { mutableStateOf(quantity.formatQuantity()) }
     val parsedValue = value.replace(',', '.').toDoubleOrNull()
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
     BoxWithConstraints {
         val maximumFieldWidth = (maxWidth - 38.dp).coerceAtLeast(0.dp)
-        val desiredFieldWidth = (78 + value.length * 10).dp.coerceAtMost(maximumFieldWidth)
-        val fieldWidth = desiredFieldWidth.coerceAtLeast(minOf(126.dp, maximumFieldWidth))
+        val defaultFieldWidth = minOf(126.dp, maximumFieldWidth)
+        val numberWidth = with(density) {
+            textMeasurer.measure(AnnotatedString(value), style = MaterialTheme.typography.bodyLarge).size.width.toDp()
+        }
+        // 16.dp — левое внутреннее поле Material TextField, 56.dp — место под кнопку подтверждения.
+        val editingFieldWidth = (numberWidth + 72.dp).coerceIn(defaultFieldWidth, maximumFieldWidth)
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (editing) {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = { value = it },
-                    modifier = Modifier.width(fieldWidth),
-                    singleLine = true,
-                    isError = value.isNotBlank() && parsedValue == null,
-                    trailingIcon = {
-                        IconButton(
-                            onClick = {
-                                parsedValue?.let {
-                                    onQuantityChanged(it.coerceAtLeast(0.0))
-                                    onConfirmed()
-                                    editing = false
-                                }
-                            },
-                            enabled = parsedValue != null
-                        ) { Icon(Icons.Outlined.Check, "Подтвердить количество", tint = colors.success) }
-                    },
-                    shape = MaterialTheme.shapes.small,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.primaryDark,
-                        unfocusedBorderColor = colors.outline
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                )
+                Box(modifier = Modifier.width(editingFieldWidth)) {
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = { value = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        isError = value.isNotBlank() && parsedValue == null,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    parsedValue?.let {
+                                        onQuantityChanged(it.coerceAtLeast(0.0))
+                                        onConfirmed()
+                                        editing = false
+                                    }
+                                },
+                                enabled = parsedValue != null
+                            ) { Icon(Icons.Outlined.Check, "Подтвердить количество", tint = colors.success) }
+                        },
+                        shape = MaterialTheme.shapes.small,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.Transparent,
+                            unfocusedTextColor = Color.Transparent,
+                            focusedBorderColor = colors.primaryDark,
+                            unfocusedBorderColor = colors.outline
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    Text(
+                        value,
+                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp, end = 56.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             } else {
                 Surface(
-                    modifier = Modifier.width(fieldWidth).clip(MaterialTheme.shapes.small).clickable { editing = true },
+                    modifier = Modifier.width(defaultFieldWidth).clip(MaterialTheme.shapes.small).clickable { editing = true },
                     shape = MaterialTheme.shapes.small,
                     color = colors.surfaceSecondary
                 ) {
@@ -368,12 +418,20 @@ private fun InventoryActions(checked: Int, total: Int, onSave: () -> Unit, onPro
     val colors = LocalColors.current
     Column {
         Text("Проверено $checked из $total", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+        if (checked < total) {
+            Text(
+                "Остальные позиции будут отмечены без изменений при переходе.",
+                modifier = Modifier.padding(top = StoqSpacing.ExtraSmall),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        }
         Row(modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Small), horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-            OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(52.dp)) { Text("Черновик") }
+            OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(52.dp)) { Text("Сохранить") }
             Button(
                 onClick = onProceed,
                 modifier = Modifier.weight(1.35f).height(52.dp),
-                enabled = checked == total,
+                enabled = total > 0,
                 colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.textOnPrimary)
             ) { Text("К подтверждению") }
         }
@@ -394,7 +452,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.confirmationContent(
     if (state.changedLines.isEmpty()) {
         item { InventoryEmptyState("Расхождений нет", "Все фактические остатки совпадают с системными.") }
     } else {
-        items(state.changedLines, key = { it.product.id }) { line -> ChangeCard(line) }
+        items(state.changedLines, key = { it.product.batchId }) { line -> ChangeCard(line) }
     }
     item {
         ConfirmationActions(
@@ -480,7 +538,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.reportContent(
     if (state.changedLines.isEmpty()) {
         item { InventoryEmptyState("Изменений нет", "Все товары были проверены без расхождений.") }
     } else {
-        items(state.changedLines, key = { it.product.id }) { line -> ReportLineCard(line) }
+        items(state.changedLines, key = { it.product.batchId }) { line -> ReportLineCard(line) }
     }
     item {
         ReportActions(state, onAction)

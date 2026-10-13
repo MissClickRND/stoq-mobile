@@ -1,6 +1,7 @@
 package bob.colbaskin.stoq.feature.supplies.presentation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -46,6 +47,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,22 +55,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
+import bob.colbaskin.stoq.common.drafts.presentation.UnsavedChangesDialog
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.supplies.data.Supply as SupplyData
 import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyDto
 import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyItemDto
+import kotlinx.serialization.Serializable
 
 private enum class SupplyStatus { Waiting, OnWay, Accepted, Mismatch }
 
@@ -76,8 +84,12 @@ private enum class SupplyStatus { Waiting, OnWay, Accepted, Mismatch }
 fun SuppliesScreen(
     onCreateSupply: () -> Unit,
     onSupplyClick: (String) -> Unit,
+    onDraftsClick: () -> Unit,
+    draftFeedback: String? = null,
+    onDraftFeedbackShown: () -> Unit = {},
     viewModel: SuppliesViewModel = hiltViewModel()
 ) {
+    RefreshOnResume(viewModel::refresh)
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf<SupplyStatus?>(null) }
     val supplies = (viewModel.state as? UiState.Success)?.data.orEmpty()
@@ -102,6 +114,7 @@ fun SuppliesScreen(
         item {
             UpdBanner()
         }
+        item { DraftsBanner(viewModel.drafts.size, "поставка", onDraftsClick) }
         item {
             StoqPrimaryButton(text = "Создать поставку", onClick = onCreateSupply)
         }
@@ -121,14 +134,15 @@ fun SuppliesScreen(
         is UiState.Error -> ErrorScreen(state.title, state.text, viewModel::refresh)
         is UiState.Success -> Unit
     }
+    DraftSnackbar(draftFeedback, onDraftFeedbackShown, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
-private fun SearchField(value: String, onChange: (String) -> Unit) {
+private fun SearchField(value: String, onChange: (String) -> Unit, onFocusChanged: ((Boolean) -> Unit)? = null) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().onFocusChanged { onFocusChanged?.invoke(it.isFocused) },
         placeholder = { Text("Поиск поставок, поставщиков или товаров…", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(Icons.Outlined.Search, null) },
         singleLine = true,
@@ -248,7 +262,8 @@ private fun statusIcon(status: SupplyStatus) = when (status) { SupplyStatus.Wait
 
 private fun SupplyData.toUiStatus() = if (status == "RECEIVED") SupplyStatus.Accepted else SupplyStatus.Waiting
 
-private data class SupplyProduct(
+@Serializable
+data class SupplyProduct(
     val productId: Long,
     val name: String,
     val category: String,
@@ -258,30 +273,70 @@ private data class SupplyProduct(
     val expires: String
 )
 
+@Serializable
+data class SupplyDraftPayload(
+    val name: String,
+    val date: String,
+    val supplier: String,
+    val products: List<SupplyProduct>
+) {
+    val hasContent: Boolean get() = name.isNotBlank() || supplier.isNotBlank() || products.isNotEmpty()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateSupplyScreen(onBack: () -> Unit, viewModel: CreateSupplyViewModel = hiltViewModel()) {
-    var name by remember { mutableStateOf("Поставка от 24.06.2024") }
+fun CreateSupplyScreen(
+    onBack: () -> Unit,
+    onSuppliesClick: () -> Unit,
+    draftId: String? = null,
+    viewModel: CreateSupplyViewModel = hiltViewModel()
+) {
+    var name by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("24.06.2024") }
-    var supplier by remember { mutableStateOf("ООО «ФудСервис»") }
+    var supplier by remember { mutableStateOf("") }
     var search by remember { mutableStateOf("") }
+    var showProductSuggestions by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
     var products by remember { mutableStateOf(emptyList<SupplyProduct>()) }
+    var hasUnsavedChanges by remember { mutableStateOf(false) }
+    var restoredDraftId by remember { mutableStateOf<String?>(null) }
+    var showExitDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(draftId) {
+        if (draftId != null && restoredDraftId != draftId) {
+            restoredDraftId = draftId
+            viewModel.loadDraft(draftId)
+        }
+    }
+    LaunchedEffect(viewModel.restoredDraft) {
+        viewModel.restoredDraft?.let { draft ->
+            name = draft.name
+            date = draft.date
+            supplier = draft.supplier
+            products = draft.products
+            hasUnsavedChanges = false
+        }
+    }
+    val currentDraft = SupplyDraftPayload(name, date, supplier, products)
+    LaunchedEffect(name, date, supplier, products, hasUnsavedChanges) {
+        if (hasUnsavedChanges && currentDraft.hasContent) viewModel.saveDraft(currentDraft, showMessage = false)
+    }
+    val hasChanges = hasUnsavedChanges && currentDraft.hasContent
+    BackHandler(enabled = hasChanges) { showExitDialog = true }
     LazyColumn(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.ArrowBack, "Назад", modifier = Modifier.clip(CircleShape).clickable(onClick = onBack).padding(6.dp))
+                Icon(Icons.Outlined.ArrowBack, "Назад", modifier = Modifier.clip(CircleShape).clickable { if (hasChanges) showExitDialog = true else onBack() }.padding(6.dp))
                 Spacer(Modifier.width(8.dp)); Column { Text("Новая поставка", style = MaterialTheme.typography.headlineMedium); Text("Создайте поставку и добавьте полученные продукты", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         item {
             StoqCard {
-                CompactTextField(name, { name = it }, "Название *", modifier = Modifier.fillMaxWidth())
+                CompactTextField(name, { name = it; hasUnsavedChanges = true }, "Название *", modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DateField(date, { showDatePicker = true }, Modifier.weight(1f))
-                    CompactTextField(supplier, { supplier = it }, "Поставщик *", Modifier.weight(1f))
+                    CompactTextField(supplier, { supplier = it; hasUnsavedChanges = true }, "Поставщик *", Modifier.weight(1f))
                 }
             }
         }
@@ -289,14 +344,23 @@ fun CreateSupplyScreen(onBack: () -> Unit, viewModel: CreateSupplyViewModel = hi
             StoqCard {
                 Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Продукты в поставке", style = MaterialTheme.typography.titleLarge); Text("Добавьте продукты, укажите количество и проверьте данные", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Box(Modifier.size(44.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .15f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.CameraAlt, "Сфотографировать УПД", tint = CustomTheme.colors.success) } }
                 Spacer(Modifier.height(10.dp))
-                SearchField(search, { search = it })
-                if (search.isNotBlank()) {
+                SearchField(
+                    value = search,
+                    onChange = { value -> search = value; showProductSuggestions = true; viewModel.searchProducts(value) },
+                    onFocusChanged = { focused ->
+                        showProductSuggestions = focused
+                        if (focused) viewModel.searchProducts(search)
+                    }
+                )
+                if (showProductSuggestions) {
                     viewModel.products.filter { it.name.contains(search, true) }.forEach { candidate ->
                         Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable {
                             if (products.none { it.productId == candidate.id }) {
                                 products = listOf(SupplyProduct(candidate.id, candidate.name, "мог", "1", "мог", "мог", date.toIsoDateTime())) + products
+                                hasUnsavedChanges = true
                             }
                             search = ""
+                            showProductSuggestions = false
                         }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.Add, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(8.dp)); Text(candidate.name, Modifier.weight(1f)); Text(candidate.unit?.shortName ?: "мог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -308,12 +372,12 @@ fun CreateSupplyScreen(onBack: () -> Unit, viewModel: CreateSupplyViewModel = hi
         }
         item { SupplyTotal(products.size) }
         items(products, key = { it.productId }) { product ->
-            SupplyProductCard(product, { products = products.filterNot { it == product } }, { updated -> products = products.map { if (it == product) updated else it } })
+            SupplyProductCard(product, { products = products.filterNot { it == product }; hasUnsavedChanges = true }, { updated -> products = products.map { if (it == product) updated else it }; hasUnsavedChanges = true })
         }
         item {
             StoqCard {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Surface(modifier = Modifier.weight(1f).height(52.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onBack), shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Box(contentAlignment = Alignment.Center) { Text("Сохранить", style = MaterialTheme.typography.labelLarge) } }
+                    Surface(modifier = Modifier.weight(1f).height(52.dp).clip(MaterialTheme.shapes.medium).clickable(enabled = currentDraft.hasContent) { viewModel.saveDraft(currentDraft, onSaved = { hasUnsavedChanges = false; onSuppliesClick() }, showMessage = false) }, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Box(contentAlignment = Alignment.Center) { Text("Сохранить", style = MaterialTheme.typography.labelLarge) } }
                     StoqPrimaryButton("На приёмку", {
                         val items = products.mapNotNull { product ->
                             product.quantity.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }?.let { quantity ->
@@ -321,15 +385,23 @@ fun CreateSupplyScreen(onBack: () -> Unit, viewModel: CreateSupplyViewModel = hi
                             }
                         }
                         if (name.isNotBlank() && items.isNotEmpty()) {
-                            viewModel.create(CreateSupplyDto(name.trim(), items, date.toIsoDateTime()), onBack)
+                            viewModel.create(CreateSupplyDto(name.trim(), items, date.toIsoDateTime()), currentDraft, onBack)
                         }
                     }, Modifier.weight(1.3f))
                 }
             }
         }
     }
-    if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { date = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }; showDatePicker = false }) { Text("Выбрать") } }, dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } }) { DatePicker(datePickerState) }
+    if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { date = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)); hasUnsavedChanges = true }; showDatePicker = false }) { Text("Выбрать") } }, dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } }) { DatePicker(datePickerState) }
     if (viewModel.savingState == UiState.Loading) LoadingScreen()
+    UnsavedChangesDialog(
+        visible = showExitDialog,
+        entityName = "создание поставки",
+        onDismiss = { showExitDialog = false },
+        onSaveAndExit = { showExitDialog = false; viewModel.saveDraft(currentDraft, { hasUnsavedChanges = false; onSuppliesClick() }, showMessage = false) },
+        onDiscardAndExit = { showExitDialog = false; viewModel.discardDraft(onBack) }
+    )
+    DraftSnackbar(viewModel.draftMessage, viewModel::consumeDraftMessage, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
@@ -340,11 +412,11 @@ private fun SupplyTotal(count: Int) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUpdate: (SupplyProduct) -> Unit) {
-    var editing by remember(product) { mutableStateOf(false) }
-    var quantity by remember(product) { mutableStateOf(product.quantity) }
-    var price by remember(product) { mutableStateOf(product.price) }
-    var batch by remember(product) { mutableStateOf(product.batch) }
-    var expires by remember(product) { mutableStateOf(product.expires) }
+    var editing by remember(product.productId) { mutableStateOf(false) }
+    var quantity by remember(product.productId) { mutableStateOf(product.quantity) }
+    var price by remember(product.productId) { mutableStateOf(product.price) }
+    var batch by remember(product.productId) { mutableStateOf(product.batch) }
+    var expires by remember(product.productId) { mutableStateOf(product.expires) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
     StoqCard(modifier = Modifier.fillMaxWidth()) {
@@ -354,13 +426,13 @@ private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUp
             Column(Modifier.weight(1f)) {
                 Row { Column(Modifier.weight(1f)) { Text(product.name, style = MaterialTheme.typography.titleMedium); Text(product.category, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Surface(shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Icon(if (editing) Icons.Outlined.Check else Icons.Outlined.Edit, if (editing) "Подтвердить" else "Редактировать", modifier = Modifier.clickable { if (editing) onUpdate(product.copy(quantity = quantity, price = price, batch = batch, expires = expires)); editing = !editing }.padding(9.dp), tint = CustomTheme.colors.primaryDark) }; Spacer(Modifier.width(8.dp)); Surface(shape = MaterialTheme.shapes.small, border = BorderStroke(1.dp, CustomTheme.colors.error.copy(alpha = .5f))) { Icon(Icons.Outlined.DeleteOutline, "Удалить", modifier = Modifier.clickable(onClick = onDelete).padding(9.dp), tint = CustomTheme.colors.error) } }
                 Spacer(Modifier.height(8.dp))
-                if (editing) { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { CompactTextField(quantity, { quantity = it }, "Количество", Modifier.weight(.7f)); CompactTextField(price, { price = it }, "Цена", Modifier.weight(.7f)); CompactTextField(batch, { batch = it }, "Партия", Modifier.weight(1.2f)) }; Spacer(Modifier.height(6.dp)); Surface(modifier = Modifier.fillMaxWidth().height(48.dp).clip(MaterialTheme.shapes.small).clickable { showDatePicker = true }, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Text(expires, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); Icon(Icons.Outlined.CalendarToday, null, modifier = Modifier.size(18.dp)) } } } else { ProductDetailsRow(quantity, batch, expires) }
+                if (editing) { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { CompactTextField(quantity, { quantity = it; onUpdate(product.copy(quantity = it, price = price, batch = batch, expires = expires)) }, "Количество", Modifier.weight(.7f)); CompactTextField(price, { price = it; onUpdate(product.copy(quantity = quantity, price = it, batch = batch, expires = expires)) }, "Цена", Modifier.weight(.7f)); CompactTextField(batch, { batch = it; onUpdate(product.copy(quantity = quantity, price = price, batch = it, expires = expires)) }, "Партия", Modifier.weight(1.2f)) }; Spacer(Modifier.height(6.dp)); Surface(modifier = Modifier.fillMaxWidth().height(48.dp).clip(MaterialTheme.shapes.small).clickable { showDatePicker = true }, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Text(expires, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); Icon(Icons.Outlined.CalendarToday, null, modifier = Modifier.size(18.dp)) } } } else { ProductDetailsRow(quantity, batch, expires) }
                 Spacer(Modifier.height(8.dp))
                 ProductPriceSummary(price, quantity)
             }
         }
     }
-    if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { expires = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) }; showDatePicker = false }) { Text("Выбрать") } }) { DatePicker(datePickerState) }
+    if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { selected -> expires = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(selected)); onUpdate(product.copy(quantity = quantity, price = price, batch = batch, expires = expires)) }; showDatePicker = false }) { Text("Выбрать") } }) { DatePicker(datePickerState) }
 }
 
 @Composable
