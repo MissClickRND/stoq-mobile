@@ -218,6 +218,10 @@ class OrdersViewModel @Inject constructor(
     private fun create() = viewModelScope.launch {
         val basket = _state.value.basket
         if (basket.isEmpty()) return@launch
+        if (basket.any { it.availability == bob.colbaskin.stoq.feature.orders.domain.model.Availability.Unavailable }) {
+            _state.update { it.copy(error = "В заказе есть недоступные блюда. Удалите их перед созданием заказа.") }
+            return@launch
+        }
         _state.update { it.copy(isCreating = true, error = null) }
         val state = _state.value
         val result = if (state.editingOrderId == null) {
@@ -236,7 +240,19 @@ class OrdersViewModel @Inject constructor(
                 val draftId = _state.value.draftId
                 _state.update {
                     val updatedOrders = listOf(result.data) + it.orders.filterNot { order -> order.id == result.data.id }
-                    it.copy(orders = updatedOrders, metrics = repository.metrics(updatedOrders), created = true, checked = true, basket = emptyList(), hasUnsavedChanges = false, isCreating = false, draftId = null)
+                    it.copy(
+                        orders = updatedOrders,
+                        metrics = repository.metrics(updatedOrders),
+                        created = true,
+                        checked = true,
+                        basket = emptyList(),
+                        existingDishIds = result.data.items.map(OrderItem::dishId).toSet(),
+                        editingOrder = result.data.takeIf { state.editingOrderId != null },
+                        hasUnsavedChanges = false,
+                        isCreating = false,
+                        draftId = null,
+                        error = null
+                    )
                 }
                 draftId?.let { draftsRepository.delete(it) }
             }

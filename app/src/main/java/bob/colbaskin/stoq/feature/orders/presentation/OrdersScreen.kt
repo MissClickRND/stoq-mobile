@@ -118,7 +118,6 @@ fun OrdersScreen(
     onCreateOrder: () -> Unit,
     onOrderClick: (String) -> Unit,
     onEditOrder: (String) -> Unit,
-    onSupplyClick: (String) -> Unit,
     onDraftsClick: () -> Unit,
     draftFeedback: String? = null,
     onDraftFeedbackShown: () -> Unit = {},
@@ -150,7 +149,7 @@ fun OrdersScreen(
                     item { Filters(state, viewModel::onAction) }
                     state.error?.let { error -> item { ErrorBanner("Ошибка заказа", error) } }
                     items(orders, key = { it.id }) { order ->
-                        OrderCard(order, onOrderClick, onSupplyClick, onEditOrder, onDelete = { orderToDelete = order }) { orderToComplete = order }
+                        OrderCard(order, onOrderClick, onEditOrder, onDelete = { orderToDelete = order }) { orderToComplete = order }
                     }
                 }
                 FloatingActionButton(
@@ -244,7 +243,10 @@ private fun CreateOrderContent(
     onSaveAndReturn: () -> Unit,
     onAction: (OrdersAction) -> Unit
 ) {
-    val menu = state.menu.filter { state.menuQuery.isBlank() || it.name.contains(state.menuQuery, true) }
+    val menu = state.menu.filter { item ->
+        item.dishId !in state.existingDishIds &&
+            (state.menuQuery.isBlank() || item.name.contains(state.menuQuery, true))
+    }
     val isEditing = state.editingOrderId != null
     var guestOrderDialogVisible by remember { mutableStateOf(false) }
     LazyColumn(
@@ -267,7 +269,14 @@ private fun CreateOrderContent(
         if (state.created) {
             item { CreatedBanner(isEditing) { onAction(OrdersAction.ResetCreation); onOrdersClick() } }
         } else if (state.basket.isNotEmpty()) {
-            if (state.checked && state.basket.any { it.availability == Availability.Unavailable }) item { ErrorBanner("Нельзя создать заказ", "1 блюдо недоступно") }
+            state.basket.count { it.availability == Availability.Unavailable }.takeIf { it > 0 }?.let { unavailableCount ->
+                item {
+                    ErrorBanner(
+                        "Нельзя создать заказ",
+                        "${unavailableCount} ${if (unavailableCount == 1) "блюдо недоступно" else "блюда недоступны"}. Удалите его из заказа или выберите другое."
+                    )
+                }
+            }
             state.error?.let { text -> item { ErrorBanner("Ошибка заказа", text) } }
             item { CreateActions(state, onAction, onSaveAndReturn) }
         } else if (!isEditing) item { EmptyBasket() }
@@ -293,14 +302,20 @@ fun OrderDetailsScreen(
     when (val orderState = state) {
         UiState.Loading -> LoadingScreen()
         is UiState.Error -> ErrorScreen(orderState.title, orderState.text, { viewModel.load(orderId) }, onBack)
-        is UiState.Success -> OrderDetailsContent(
-            orderId = orderId,
-            order = orderState.data,
-            onBack = onBack,
-            onDelete = { deleteDialogVisible = true },
-            onEdit = { onEditOrder(orderId) },
-            onComplete = { completeDialogVisible = true }
-        )
+        is UiState.Success -> PullToRefreshContainer(
+            isRefreshing = viewModel.isRefreshing,
+            onRefresh = { viewModel.load(orderId) },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            OrderDetailsContent(
+                orderId = orderId,
+                order = orderState.data,
+                onBack = onBack,
+                onDelete = { deleteDialogVisible = true },
+                onEdit = { onEditOrder(orderId) },
+                onComplete = { completeDialogVisible = true }
+            )
+        }
     }
     if (deleteDialogVisible) {
         AlertDialog(
@@ -535,58 +550,53 @@ private fun Filters(state: OrdersState, action: (OrdersAction) -> Unit) {
 private fun OrderCard(
     order: Order,
     onClick: (String) -> Unit,
-    onSupplyClick: (String) -> Unit,
     onEdit: (String) -> Unit,
     onDelete: () -> Unit,
     onComplete: () -> Unit
 ) = StoqCard(
     modifier = Modifier.fillMaxWidth().clickable { onClick(order.id) },
-    contentPadding = PaddingValues(10.dp)
+    contentPadding = PaddingValues(14.dp)
 ) {
-    val item = order.items.firstOrNull()
-    val isAvailable = item?.availability == Availability.Available
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(38.dp).clip(CircleShape).background((if (isAvailable) CustomTheme.colors.success else CustomTheme.colors.warning).copy(alpha = .14f)),
+            Modifier.size(42.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .15f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.LocalDining, null, modifier = Modifier.size(21.dp), tint = if (isAvailable) CustomTheme.colors.success else CustomTheme.colors.warning)
+            Icon(Icons.Outlined.LocalDining, null, modifier = Modifier.size(22.dp), tint = CustomTheme.colors.primaryDark)
         }
         Spacer(Modifier.width(9.dp))
         Column(Modifier.weight(1f)) {
-            Text(item?.name ?: "мог", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("Арт. ${item?.dishId ?: "мог"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Заказ #${order.id}", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(order.dateTimeLabel(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Column(horizontalAlignment = Alignment.End) {
             StoqStatusPill(order.status.label(), order.status.tone())
-            Surface(
-                modifier = Modifier.padding(top = 7.dp).size(30.dp).clickable(enabled = order.status != OrderStatus.Completed, onClick = onDelete),
-                shape = MaterialTheme.shapes.small,
-                color = CustomTheme.colors.error.copy(alpha = .88f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.surface)
+            if (order.status != OrderStatus.Completed) {
+                Surface(
+                    modifier = Modifier.padding(top = 7.dp).size(34.dp).clickable(onClick = onDelete),
+                    shape = MaterialTheme.shapes.small,
+                    color = CustomTheme.colors.error.copy(alpha = .88f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.surface)
+                    }
                 }
             }
         }
     }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable(enabled = order.supplyId != null) { order.supplyId?.let(onSupplyClick) }
-    ) {
-        Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
-            Text("ID поставки: ${order.supplyId ?: "мог"}", modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Spacer(Modifier.weight(1f))
-        Icon(Icons.Outlined.ChevronRight, "Открыть поставку", modifier = Modifier.size(20.dp), tint = if (order.supplyId == null) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f) else CustomTheme.colors.primaryDark)
+    HorizontalDivider(Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OrderCardValue("Тип", order.type.cardLabel(), Modifier.weight(1f))
+        OrderCardValue("Стол", order.table?.toString() ?: "—", Modifier.weight(.62f))
+        OrderCardValue("Гостей", order.guests?.toString() ?: "—", Modifier.weight(.72f))
+        OrderCardValue("Позиций", order.positions.toString(), Modifier.weight(.85f))
     }
-    HorizontalDivider(Modifier.padding(vertical = 9.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
+    HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = .45f))
     Row(modifier = Modifier.fillMaxWidth()) {
-        OrderCardValue("Остаток", "мог", Modifier.weight(1f))
-        OrderCardValue("Ед. измерения", "мог", Modifier.weight(1f))
-        OrderCardValue("Полная цена", money(order.total), Modifier.weight(1f))
-        OrderCardValue("Срок годности", "Срок не определён", Modifier.weight(1.4f))
+        OrderCardValue("Создан", order.createdAt.toCardTimestamp(), Modifier.weight(1f))
+        OrderCardValue("Обновлён", order.updatedAt.toCardTimestamp(), Modifier.weight(1f))
     }
+    Text("Сумма заказа: ${money(order.total)}", modifier = Modifier.padding(top = 10.dp), style = MaterialTheme.typography.labelLarge, color = CustomTheme.colors.primaryDark)
     if (order.status != OrderStatus.Completed) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
@@ -603,6 +613,10 @@ private fun OrderCardValue(label: String, value: String, modifier: Modifier) = C
     Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     Text(value, modifier = Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
+
+private fun Order.dateTimeLabel() = listOf(date, time).filter { it.isNotBlank() && it != "мог" }.joinToString(" • ").ifBlank { "мог" }
+private fun OrderType.cardLabel() = if (this == OrderType.DineIn) "В зале" else "На вынос"
+private fun String?.toCardTimestamp() = this?.replace('T', ' ')?.take(16)?.takeIf(String::isNotBlank) ?: "мог"
 
 @Composable
 private fun InfoLine(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) = Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) { Icon(icon, null, modifier = Modifier.size(17.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(7.dp)); Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -878,7 +892,7 @@ private fun ErrorBanner(title: String, text: String) = Surface(Modifier.fillMaxW
 private fun CreateActions(state: OrdersState, action: (OrdersAction) -> Unit, onSave: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onSave, Modifier.weight(1f).height(52.dp), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Text("Сохранить") }
-        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && !state.isCreating && state.error == null, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Сохранение…" else if (state.editingOrderId != null) "Добавить блюда  →" else "Создать заказ  →") }
+        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && state.basket.none { it.availability == Availability.Unavailable } && !state.isCreating, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Сохранение…" else if (state.editingOrderId != null) "Добавить блюда" else "Создать заказ  →") }
     }
 }
 

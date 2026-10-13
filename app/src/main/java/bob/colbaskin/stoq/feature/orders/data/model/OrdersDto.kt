@@ -11,7 +11,6 @@ data class OrderDto(
     val table: Int? = null,
     val guests: Int? = null,
     val status: String = "created",
-    val supplyId: Long? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     val items: List<OrderItemDto> = emptyList()

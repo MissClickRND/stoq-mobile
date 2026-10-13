@@ -119,7 +119,8 @@ private fun OrderDto.toOrder(dishes: Map<Long, DishDto>): Order {
         id = id.toString(), date = dateTime.take(10).ifBlank { "мог" }, time = dateTime.drop(11).ifBlank { "мог" },
         status = when (status.lowercase()) { "completed", "done" -> OrderStatus.Completed; "preparing" -> OrderStatus.Preparing; else -> OrderStatus.Processing },
         type = when (type?.lowercase()) { "takeaway", "delivery" -> OrderType.Delivery; else -> OrderType.DineIn },
-        location = table?.let { "Стол $it" } ?: "мог", customer = "мог", supplyId = supplyId?.toString(), table = table, guests = guests,
+        location = table?.let { "Стол $it" } ?: "мог", customer = "мог", table = table, guests = guests,
+        createdAt = createdAt, updatedAt = updatedAt,
         items = items.map { item -> dishes[item.dishId]?.toOrderItem()?.copy(quantity = item.quantity)
             ?: OrderItem(item.dishId.toString(), "Блюдо #${item.dishId}", "мог", 0, "", item.quantity, Availability.Unknown) }
     )
