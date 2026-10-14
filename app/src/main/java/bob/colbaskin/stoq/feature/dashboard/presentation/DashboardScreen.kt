@@ -57,6 +57,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import kotlin.math.roundToInt
 
@@ -232,30 +234,12 @@ private fun MetricChart() {
 @Composable
 private fun MetricGrid(onOrdersClick: () -> Unit) {
     val items = listOf(
-        DashboardMetric("Выручка", "487 320 ₽", "↑ 18%", Icons.Outlined.AccountBalanceWallet, DashboardGreen),
-        DashboardMetric("Прибыль", "162 450 ₽", "↑ 23%", Icons.Outlined.BarChart, DashboardGreen),
-        DashboardMetric("Заказы", "248", "↑ 12%", Icons.Outlined.ShoppingCart, DashboardRed),
-        DashboardMetric("Средний чек", "1 965 ₽", "↑ 6%", Icons.Outlined.Group, MaterialTheme.colorScheme.onSurfaceVariant)
+        StoqMetric("Выручка", "487 320 ₽", "18%", Icons.Outlined.AccountBalanceWallet, DashboardGreen),
+        StoqMetric("Прибыль", "162 450 ₽", "23%", Icons.Outlined.BarChart, DashboardGreen),
+        StoqMetric("Заказы", "248", "12%", Icons.Outlined.ShoppingCart, DashboardRed, onClick = onOrdersClick),
+        StoqMetric("Средний чек", "1 965 ₽", "6%", Icons.Outlined.Group, MaterialTheme.colorScheme.onSurfaceVariant)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(horizontal = 20.dp)) {
-        items.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { metric ->
-                    StoqCard(modifier = Modifier.weight(1f).clickable(enabled = metric.title == "Заказы", onClick = onOrdersClick)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(42.dp).clip(CircleShape).background(metric.tint.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Icon(metric.icon, null, tint = metric.tint) }
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(metric.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(metric.value, style = MaterialTheme.typography.titleMedium)
-                                Text(metric.growth, color = DashboardGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    StoqMetricGrid(items, Modifier.padding(horizontal = 20.dp))
 }
 
 @Composable
@@ -338,7 +322,6 @@ private fun SectionCard(title: String, action: String, onActionClick: () -> Unit
 private fun metricValue(index: Int) = listOf("487 320 ₽", "162 450 ₽", "248")[index]
 private fun metricGrowth(index: Int) = listOf("18%", "23%", "12%")[index]
 
-private data class DashboardMetric(val title: String, val value: String, val growth: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: Color)
 private data class StockProduct(val name: String, val amount: String, val id: String, val avatarRes: Int?)
 
 @Composable

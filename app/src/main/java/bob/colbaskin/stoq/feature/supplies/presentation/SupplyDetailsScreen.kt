@@ -62,7 +62,8 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.R
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.feature.supplies.data.Supply
 
 private enum class ReceptionStatus(val title: String, val tone: StoqStatusTone) {
@@ -187,26 +188,10 @@ private fun SupplyOverview(supply: Supply?) {
     )
     Column {
         Text("Информация о поставке", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
-        Column(
-            modifier = Modifier.padding(top = StoqSpacing.Medium),
-            verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)
-        ) {
-            metrics.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                    row.forEach { metric ->
-                        StoqMetricCard(
-                            label = metric.label,
-                            value = metric.value,
-                            change = "",
-                            icon = metric.icon,
-                            tint = metric.tint,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
-                }
-            }
-        }
+        StoqMetricGrid(
+            metrics = metrics.map { StoqMetric(it.label, it.value, icon = it.icon, tint = it.tint) },
+            modifier = Modifier.padding(top = StoqSpacing.Medium)
+        )
     }
 }
 

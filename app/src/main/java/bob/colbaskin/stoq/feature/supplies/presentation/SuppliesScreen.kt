@@ -68,6 +68,8 @@ import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
@@ -166,33 +168,12 @@ private fun SearchField(value: String, onChange: (String) -> Unit, onFocusChange
 
 @Composable
 private fun StorageMetrics(supplies: List<SupplyData>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Metric("Всего поставок", supplies.size.toString(), "мог", Icons.Outlined.LocalShipping, Modifier.weight(1f))
-            Metric("Ожидают приёмки", supplies.count { it.status != "RECEIVED" }.toString(), "мог", Icons.Outlined.WarningAmber, Modifier.weight(1f), warning = true)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Metric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "мог", Icons.Outlined.CheckCircle, Modifier.weight(1f))
-            Metric("Сумма поставок", supplies.sumOf { it.totalPrice ?: 0.0 }.takeIf { it > 0 }?.toRubles() ?: "мог", "мог", Icons.Outlined.Inventory2, Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun Metric(title: String, value: String, change: String, icon: ImageVector, modifier: Modifier, warning: Boolean = false) {
-    StoqCard(modifier = modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).clip(CircleShape).background((if (warning) CustomTheme.colors.warning else CustomTheme.colors.success).copy(alpha = .13f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = if (warning) CustomTheme.colors.warning else CustomTheme.colors.success)
-            }
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                Text(value, style = MaterialTheme.typography.titleLarge, maxLines = 1)
-                Text("↑ $change", style = MaterialTheme.typography.bodySmall, color = if (warning) CustomTheme.colors.error else CustomTheme.colors.success, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
+    StoqMetricGrid(listOf(
+        StoqMetric("Всего поставок", supplies.size.toString(), "мог", Icons.Outlined.LocalShipping, CustomTheme.colors.success),
+        StoqMetric("Ожидают приёмки", supplies.count { it.status != "RECEIVED" }.toString(), "мог", Icons.Outlined.WarningAmber, CustomTheme.colors.warning),
+        StoqMetric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "мог", Icons.Outlined.CheckCircle, CustomTheme.colors.success),
+        StoqMetric("Сумма поставок", supplies.sumOf { it.totalPrice ?: 0.0 }.takeIf { it > 0 }?.toRubles() ?: "мог", "мог", Icons.Outlined.Inventory2, CustomTheme.colors.success)
+    ))
 }
 
 @Composable

@@ -59,6 +59,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
@@ -269,32 +271,9 @@ private fun TeamMetrics(snapshot: AdminSnapshot) {
         TeamMetric("Ожидают подтверждения", employees.count { it.status == EmployeeStatus.Pending }.toString(), "Приглашения отправлены", Icons.Outlined.AccessTime, LocalColors.current.warning),
         TeamMetric("Администраторов", employees.count { it.role == EmployeeRole.Administrator }.toString(), "С правами администратора", Icons.Outlined.AdminPanelSettings, LocalColors.current.secondary)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric ->
-                    StoqCard(modifier = Modifier.weight(1f), contentPadding = PaddingValues(StoqSpacing.Medium)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                modifier = Modifier.size(40.dp),
-                                color = metric.tint.copy(alpha = 0.14f),
-                                shape = MaterialTheme.shapes.large
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(metric.icon, null, modifier = Modifier.size(22.dp), tint = metric.tint)
-                                }
-                            }
-                            Column(modifier = Modifier.padding(start = StoqSpacing.Small)) {
-                                Text(metric.label, style = MaterialTheme.typography.bodySmall, color = LocalColors.current.textSecondary, maxLines = 2)
-                                Text(metric.value, style = MaterialTheme.typography.titleLarge, color = LocalColors.current.textPrimary)
-                            }
-                        }
-                        Text(metric.subtitle, modifier = Modifier.padding(top = StoqSpacing.Small), style = MaterialTheme.typography.bodySmall, color = LocalColors.current.textSecondary, maxLines = 2)
-                    }
-                }
-            }
-        }
-    }
+    StoqMetricGrid(metrics.map { metric ->
+        StoqMetric(metric.label, metric.value, icon = metric.icon, tint = metric.tint, supportingText = metric.subtitle)
+    })
 }
 
 @Composable

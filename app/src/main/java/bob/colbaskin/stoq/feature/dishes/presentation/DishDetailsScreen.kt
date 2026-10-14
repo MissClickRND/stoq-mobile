@@ -33,6 +33,8 @@ import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
@@ -122,10 +124,10 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: (
         DetailMetric("Популярность", dish.popularity.takeIf { it >= 0 }?.let { "#$it" } ?: "мог", "мог", "", Icons.Outlined.StarOutline, colors.warning),
         DetailMetric("Остатки ингредиентов", "мог", "мог", "", Icons.Outlined.Inventory2, colors.warning)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) { items.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) { row.forEach { metric -> DetailMetricCard(metric, Modifier.weight(1f)) } } } }
+    StoqMetricGrid(items.map { metric ->
+        StoqMetric(metric.label, metric.value, metric.change, metric.icon, metric.tint, metric.note)
+    })
 }
-
-@Composable private fun DetailMetricCard(metric: DetailMetric, modifier: Modifier) { val colors = LocalColors.current; Card(modifier, colors = CardDefaults.cardColors(containerColor = colors.surface), shape = MaterialTheme.shapes.medium) { Column(Modifier.padding(StoqSpacing.Medium)) { Box(Modifier.size(40.dp).background(metric.tint.copy(alpha = .13f), CircleShape), contentAlignment = Alignment.Center) { Icon(metric.icon, null, tint = metric.tint) }; Spacer(Modifier.height(7.dp)); Text(metric.label, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 2); Row(verticalAlignment = Alignment.CenterVertically) { Text(metric.value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = colors.textPrimary, maxLines = 1); if (metric.change.isNotEmpty()) { Spacer(Modifier.width(4.dp)); Text("↑ ${metric.change}", style = MaterialTheme.typography.labelSmall, color = metric.tint, fontWeight = FontWeight.Bold) } }; Spacer(Modifier.height(3.dp)); Text(metric.note, style = MaterialTheme.typography.bodySmall, color = metric.tint, maxLines = 2) } } }
 
 @Composable private fun Ingredients(dish: Dish) {
     SectionCard("Ингредиенты блюда", showChevron = false) {

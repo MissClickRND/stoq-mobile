@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Refresh
@@ -77,7 +76,8 @@ import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
@@ -490,16 +490,9 @@ private fun ConfirmationMetrics(state: InventoryState) {
         Triple("К удалению", state.deletedLines.size.toString(), colors.error),
         Triple("Без изменений", (state.lines.size - state.changedLines.size).toString(), colors.secondary)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric ->
-                    StoqMetricCard(metric.first, metric.second, "", if (metric.first == "К удалению") Icons.Outlined.DeleteOutline else Icons.Outlined.Refresh, metric.third, Modifier.weight(1f))
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
+    StoqMetricGrid(metrics.map { metric ->
+        StoqMetric(metric.first, metric.second, icon = if (metric.first == "К удалению") Icons.Outlined.DeleteOutline else Icons.Outlined.Refresh, tint = metric.third)
+    })
 }
 
 @Composable
@@ -566,32 +559,20 @@ private fun androidx.compose.foundation.lazy.LazyListScope.reportContent(
 @Composable
 private fun ReportActions(state: InventoryState, onAction: (InventoryAction) -> Unit) {
     val context = LocalContext.current
-    val downloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val downloadLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        saveInventoryCsv(context.contentResolver, uri, state)
-        onAction(InventoryAction.ReportSaved("CSV"))
-    }
-    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        saveInventoryPdf(context.contentResolver, uri, state)
-        onAction(InventoryAction.ReportSaved("PDF"))
+        saveInventoryXlsx(context.contentResolver, uri, state)
+        onAction(InventoryAction.ReportSaved("XLSX"))
     }
     Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-            OutlinedButton(
-                onClick = { downloadLauncher.launch("inventory-report.csv") },
-                modifier = Modifier.weight(1f).height(52.dp)
-            ) {
-                Icon(Icons.Outlined.FileDownload, null, modifier = Modifier.size(19.dp))
-                Text("Скачать", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
-            }
-            OutlinedButton(
-                onClick = { pdfLauncher.launch("inventory-report.pdf") },
-                modifier = Modifier.weight(1f).height(52.dp)
-            ) {
-                Icon(Icons.Outlined.PictureAsPdf, null, modifier = Modifier.size(19.dp))
-                Text("В PDF", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
-            }
+        OutlinedButton(
+            onClick = { downloadLauncher.launch("inventory-report.xlsx") },
+            modifier = Modifier.fillMaxWidth().height(52.dp)
+        ) {
+            Icon(Icons.Outlined.FileDownload, null, modifier = Modifier.size(19.dp))
+            Text("Экспорт XLSX", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
         }
         Button(
             onClick = { onAction(InventoryAction.StartNew) },
@@ -613,23 +594,9 @@ private fun ReportMetrics(state: InventoryState) {
         ReportMetric("Удалено", state.deletedLines.size.toString(), colors.error, Icons.Outlined.DeleteOutline),
         ReportMetric("Завершено", state.reportTime(), colors.secondary, Icons.Outlined.CalendarToday, state.reportDateTime().substringBefore(","))
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric ->
-                    StoqMetricCard(
-                        label = metric.label,
-                        value = metric.value,
-                        change = "",
-                        icon = metric.icon,
-                        tint = metric.tint,
-                        modifier = Modifier.weight(1f),
-                        supportingText = metric.supportingText
-                    )
-                }
-            }
-        }
-    }
+    StoqMetricGrid(metrics.map { metric ->
+        StoqMetric(metric.label, metric.value, icon = metric.icon, tint = metric.tint, supportingText = metric.supportingText)
+    })
 }
 
 private data class ReportMetric(

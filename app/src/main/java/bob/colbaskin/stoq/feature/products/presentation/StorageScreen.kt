@@ -73,7 +73,8 @@ import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
@@ -353,23 +354,7 @@ private fun ProductMetrics(products: List<Product>) {
         StorageMetric("Скоро истекут", products.count { it.expiry != "мог" }.toString(), "мог", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
         StorageMetric("Поставщиков", "мог", "мог", "активных поставщиков", Icons.Outlined.Group, colors.success)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                row.forEach { metric ->
-                    StoqMetricCard(
-                        label = metric.label,
-                        value = metric.value,
-                        change = metric.change,
-                        icon = metric.icon,
-                        tint = metric.tint,
-                        modifier = Modifier.weight(1f),
-                        supportingText = metric.supportingText
-                    )
-                }
-            }
-        }
-    }
+    StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint, it.supportingText) })
 }
 
 private data class StorageMetric(

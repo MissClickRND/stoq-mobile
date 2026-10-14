@@ -88,6 +88,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
@@ -508,28 +510,13 @@ private fun OrderSearch(value: String, orders: List<Order>, onChange: (String) -
 @Composable
 private fun MetricsGrid(state: OrdersState) = Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     val statistics = state.todayStatistics
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Metric("Всего заказов сегодня", statistics?.total?.toString() ?: "мог", "", Icons.Outlined.LocalDining, CustomTheme.colors.success, Modifier.weight(1f))
-        Metric("В обработке", statistics?.active?.toString() ?: "мог", "", Icons.Outlined.Refresh, CustomTheme.colors.warning, Modifier.weight(1f))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Metric("Выполнено", statistics?.completed?.toString() ?: "мог", "", Icons.Outlined.Check, CustomTheme.colors.success, Modifier.weight(1f))
-        Metric("Отменено", statistics?.cancelled?.toString() ?: "мог", "", Icons.Outlined.Close, CustomTheme.colors.error, Modifier.weight(1f))
-    }
-    Metric("Выручка от заказов", statistics?.revenue?.let(::money) ?: "мог", "", Icons.Outlined.LocalDining, CustomTheme.colors.success, Modifier.fillMaxWidth())
-}
-
-@Composable
-private fun Metric(title: String, value: String, growth: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: androidx.compose.ui.graphics.Color, modifier: Modifier) = StoqCard(modifier) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(42.dp).clip(CircleShape).background(tint.copy(alpha = .13f)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint) }
-        Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-            Text(value, style = MaterialTheme.typography.titleLarge, maxLines = 1)
-            if (growth.isNotBlank()) Text("↑ $growth", style = MaterialTheme.typography.bodySmall, color = tint, fontWeight = FontWeight.Bold)
-        }
-    }
+    StoqMetricGrid(listOf(
+        StoqMetric("Всего заказов сегодня", statistics?.total?.toString() ?: "мог", icon = Icons.Outlined.LocalDining, tint = CustomTheme.colors.success),
+        StoqMetric("В обработке", statistics?.active?.toString() ?: "мог", icon = Icons.Outlined.Refresh, tint = CustomTheme.colors.warning),
+        StoqMetric("Выполнено", statistics?.completed?.toString() ?: "мог", icon = Icons.Outlined.Check, tint = CustomTheme.colors.success),
+        StoqMetric("Отменено", statistics?.cancelled?.toString() ?: "мог", icon = Icons.Outlined.Close, tint = CustomTheme.colors.error),
+        StoqMetric("Выручка от заказов", statistics?.revenue?.let(::money) ?: "мог", icon = Icons.Outlined.LocalDining, tint = CustomTheme.colors.success)
+    ))
 }
 
 @Composable
