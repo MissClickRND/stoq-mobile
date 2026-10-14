@@ -324,7 +324,7 @@ fun CreateSupplyScreen(
                     quantity = item.quantity.toSupplyNumber(),
                     price = item.price.toSupplyNumber(),
                     batch = "мог",
-                    expires = "Укажите срок"
+                    expires = item.expiresAt?.toExpiryDisplayValue() ?: "Укажите срок"
                 )
             }
             hasUnsavedChanges = products.isNotEmpty() || supplier.isNotBlank()
@@ -372,7 +372,7 @@ fun CreateSupplyScreen(
                     viewModel.products.filter { it.name.contains(search, true) }.forEach { candidate ->
                         Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable {
                             if (products.none { it.productId == candidate.id }) {
-                                products = listOf(SupplyProduct(candidate.id, candidate.name, "мог", "1", "0", "мог", date.toIsoDateTime())) + products
+                                products = listOf(SupplyProduct(candidate.id, candidate.name, "мог", "1", "0", "мог", "Укажите срок")) + products
                                 hasUnsavedChanges = true
                             }
                             search = ""
@@ -398,14 +398,15 @@ fun CreateSupplyScreen(
                         val items = products.mapNotNull { product ->
                             val quantity = product.quantity.replace(',', '.').toDoubleOrNull()
                             val price = product.price.replace(',', '.').toDoubleOrNull()
-                            if (quantity != null && quantity > 0 && price != null && price >= 0) {
-                                CreateSupplyItemDto(product.productId, quantity, quantity * price, product.expires.toIsoDateTime())
+                            val expiresAt = product.expires.toExpiryIsoDateTime()
+                            if (quantity != null && quantity > 0 && price != null && price >= 0 && expiresAt != null) {
+                                CreateSupplyItemDto(product.productId, quantity, quantity * price, expiresAt)
                             } else null
                         }
-                        if (name.isNotBlank() && supplier.isNotBlank() && items.isNotEmpty()) {
+                        if (name.isNotBlank() && supplier.isNotBlank() && items.isNotEmpty() && items.size == products.size) {
                             viewModel.create(CreateSupplyDto(name.trim(), supplier.trim(), items, date.toIsoDateTime()), currentDraft, onBack)
                         }
-                    }, Modifier.weight(1.3f))
+                    }, Modifier.weight(1.3f), enabled = products.isNotEmpty() && products.all { it.expires.toExpiryIsoDateTime() != null })
                 }
             }
         }
@@ -434,7 +435,7 @@ private fun SupplyTotal(products: List<SupplyProduct>) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUpdate: (SupplyProduct) -> Unit) {
-    var editing by remember(product.productId) { mutableStateOf(false) }
+    var editing by remember(product.productId) { mutableStateOf(product.expires.toExpiryIsoDateTime() == null) }
     var quantity by remember(product.productId) { mutableStateOf(product.quantity) }
     var price by remember(product.productId) { mutableStateOf(product.price) }
     var batch by remember(product.productId) { mutableStateOf(product.batch) }
@@ -504,6 +505,19 @@ private fun Double?.toSupplyNumber(): String = this?.let { if (it % 1.0 == 0.0) 
 private fun String.toIsoDateTime(): String {
     val parts = trim().removePrefix("Годен до: ").split('.')
     return if (parts.size == 3) "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00.000Z" else "2026-01-01T00:00:00.000Z"
+}
+
+private fun String.toExpiryIsoDateTime(): String? {
+    val parts = trim().removePrefix("Годен до: ").split('.')
+    return if (parts.size == 3 && parts.all(String::isNotBlank)) {
+        "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00.000Z"
+    } else null
+}
+
+private fun String.toExpiryDisplayValue(): String? {
+    val datePart = substringBefore('T').takeIf { it.length == 10 } ?: return null
+    val parts = datePart.split('-')
+    return if (parts.size == 3) "${parts[2]}.${parts[1]}.${parts[0]}" else null
 }
 
 @Composable

@@ -26,7 +26,7 @@ class RemoteAiSupplyRepository @Inject constructor(
             AiSupplyRecognition(
                 sellerName = response.sellerName,
                 items = response.items.map { item ->
-                    AiSupplyItem(item.productId, item.name, item.quantity, item.price, item.totalPrice, item.unit?.shortName)
+                    AiSupplyItem(item.productId, item.name, item.quantity, item.price, item.totalPrice, item.expiresAt, item.unit?.shortName)
                 }
             )
         }

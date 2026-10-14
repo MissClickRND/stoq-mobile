@@ -15,6 +15,7 @@ data class AiSupplyItemDto(
     val quantity: Double? = null,
     val price: Double? = null,
     val totalPrice: Double? = null,
+    val expiresAt: String? = null,
     val unit: AiSupplyUnitDto? = null
 )
 
@@ -36,5 +37,6 @@ data class AiSupplyItem(
     val quantity: Double?,
     val price: Double?,
     val totalPrice: Double?,
+    val expiresAt: String?,
     val unit: String?
 )
