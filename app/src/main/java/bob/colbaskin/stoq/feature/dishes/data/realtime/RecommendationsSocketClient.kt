@@ -4,6 +4,7 @@ import bob.colbaskin.stoq.BuildConfig
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.feature.dishes.data.model.DishRecommendationDto
 import bob.colbaskin.stoq.feature.dishes.data.model.StopListDishDto
+import android.util.Log
 import io.socket.client.IO
 import io.socket.client.Socket
 import io.socket.engineio.client.transports.WebSocket
@@ -35,6 +36,7 @@ private const val StopListResultEvent = "recommendations:stopListResult"
 private const val DishRecommendationsResultEvent = "recommendations:dishRecommendationsResult"
 private const val StopListUpdatedEvent = "recommendations:stopListUpdated"
 private const val SocketResponseTimeoutMillis = 15_000L
+private const val SocketLogTag = "StoqRecommendationsWs"
 
 private data class SocketResult(
     val event: String,
@@ -42,13 +44,19 @@ private data class SocketResult(
     val payload: JsonElement
 )
 
+data class StopListSocketUpdate(
+    val reason: String?,
+    val updatedAt: String?,
+    val items: List<StopListDishDto>
+)
+
 @Singleton
 class RecommendationsSocketClient @Inject constructor(
     private val json: Json
 ) {
     private val results = MutableSharedFlow<SocketResult>(extraBufferCapacity = 16)
-    private val _stopListUpdates = MutableSharedFlow<List<StopListDishDto>>(extraBufferCapacity = 1)
-    val stopListUpdates: SharedFlow<List<StopListDishDto>> = _stopListUpdates.asSharedFlow()
+    private val _stopListUpdates = MutableSharedFlow<StopListSocketUpdate>(extraBufferCapacity = 1)
+    val stopListUpdates: SharedFlow<StopListSocketUpdate> = _stopListUpdates.asSharedFlow()
 
     private val socketDelegate = lazy {
         IO.socket(
@@ -58,6 +66,9 @@ class RecommendationsSocketClient @Inject constructor(
                 reconnection = true
             }
         ).also { socket ->
+            socket.on(Socket.EVENT_CONNECT) { logDebug("Подключено к namespace /recommendations") }
+            socket.on(Socket.EVENT_DISCONNECT) { args -> logDebug("Отключено: ${args.firstOrNull()?.toString().orEmpty()}") }
+            socket.on(Socket.EVENT_CONNECT_ERROR) { args -> logError("Ошибка подключения", args.firstOrNull()) }
             socket.on(StopListResultEvent) { args -> emitResult(StopListResultEvent, args.firstOrNull()) }
             socket.on(DishRecommendationsResultEvent) { args -> emitResult(DishRecommendationsResultEvent, args.firstOrNull()) }
             socket.on(StopListUpdatedEvent) { args -> emitStopListUpdate(args.firstOrNull()) }
@@ -98,15 +109,19 @@ class RecommendationsSocketClient @Inject constructor(
                     }.first()
                 }
                 socket.connect()
+                logDebug("→ $requestEvent, requestId=$requestId, search=${search?.takeIf(String::isNotBlank) ?: "нет"}")
                 socket.emit(requestEvent, JSONObject().put("requestId", requestId).apply {
                     search?.takeIf(String::isNotBlank)?.let { put("search", it) }
                 })
                 awaitingResult.await()
             }
-        } ?: return UiState.Error(
-            title = "Не удалось получить данные",
-            text = "Сервер не ответил вовремя. Попробуйте ещё раз."
-        )
+        } ?: run {
+            logDebug("Таймаут: не получен $resultEvent для requestId=$requestId")
+            return UiState.Error(
+                title = "Не удалось получить данные",
+                text = "Сервер не ответил вовремя. Попробуйте ещё раз."
+            )
+        }
 
         return runCatching {
             UiState.Success(json.decodeFromJsonElement(serializer, response.payload.resultList()))
@@ -121,16 +136,37 @@ class RecommendationsSocketClient @Inject constructor(
     private fun emitResult(event: String, value: Any?) {
         val parsed = value?.toString()?.let { raw -> runCatching { json.parseToJsonElement(raw) }.getOrNull() } ?: return
         val requestId = (parsed as? JsonObject)?.get("requestId")?.jsonPrimitive?.contentOrNull
+        logDebug("← $event, requestId=${requestId ?: "нет"}, данные=${parsed.toLogText()}")
         results.tryEmit(SocketResult(event, requestId, parsed))
     }
 
     private fun emitStopListUpdate(value: Any?) {
         val payload = value?.toString()?.let { raw -> runCatching { json.parseToJsonElement(raw) }.getOrNull() } ?: return
+        logDebug("← $StopListUpdatedEvent, данные=${payload.toLogText()}")
         val stopList = (payload as? JsonObject)?.get("stopList") ?: return
         val parsed = runCatching {
             json.decodeFromJsonElement(ListSerializer(StopListDishDto.serializer()), stopList)
         }.getOrNull() ?: return
-        _stopListUpdates.tryEmit(parsed)
+        val objectPayload = payload as? JsonObject
+        _stopListUpdates.tryEmit(
+            StopListSocketUpdate(
+                reason = objectPayload?.get("reason")?.jsonPrimitive?.contentOrNull,
+                updatedAt = objectPayload?.get("updatedAt")?.jsonPrimitive?.contentOrNull,
+                items = parsed
+            )
+        )
+    }
+
+    private fun logDebug(message: String) {
+        if (BuildConfig.DEBUG) Log.d(SocketLogTag, message)
+    }
+
+    private fun logError(message: String, error: Any?) {
+        if (BuildConfig.DEBUG) Log.e(SocketLogTag, "$message: ${error?.toString().orEmpty()}")
+    }
+
+    private fun JsonElement.toLogText(): String = toString().let { text ->
+        if (text.length <= 1_000) text else text.take(1_000) + "…"
     }
 
     private fun JsonElement.resultList(): JsonElement = when (this) {

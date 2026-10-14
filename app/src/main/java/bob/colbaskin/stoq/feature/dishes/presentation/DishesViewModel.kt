@@ -68,6 +68,8 @@ class DishesViewModel @Inject constructor(
         private set
     var isRecommendationsRefreshing by mutableStateOf(false)
         private set
+    var socketUpdateMessage by mutableStateOf<String?>(null)
+        private set
     private var stopList = emptyList<StopListDish>()
     private var recommendations = emptyList<RecommendedDish>()
     private var stopListFilterState by mutableStateOf(CollectionFilterState(firstFilter = "Любая причина"))
@@ -79,10 +81,11 @@ class DishesViewModel @Inject constructor(
         refresh()
         refreshProducts()
         viewModelScope.launch {
-            recommendationsRepository.stopListUpdates.collect { updatedStopList ->
-                stopList = updatedStopList
+            recommendationsRepository.stopListUpdates.collect { update ->
+                stopList = update.items
                 rebuildStopListDishes()
-                stopListState = UiState.Success(updatedStopList)
+                stopListState = UiState.Success(update.items)
+                socketUpdateMessage = "Данные обновлены: ${update.reason ?: "unknown"}"
                 if (recommendedState is UiState.Success) loadRecommendations()
             }
         }
@@ -223,6 +226,10 @@ class DishesViewModel @Inject constructor(
     }
 
     fun recommendation(dishId: String): RecommendedDish? = recommendations.firstOrNull { it.dishId == dishId }
+
+    fun socketUpdateMessageShown() {
+        socketUpdateMessage = null
+    }
 
     override fun onCleared() {
         recommendationsRepository.disconnect()

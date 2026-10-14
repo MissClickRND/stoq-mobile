@@ -36,9 +36,11 @@ import bob.colbaskin.stoq.R
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
@@ -96,6 +98,7 @@ fun DishesScreen(
         items(state.dishes, key = Dish::id) { dish -> DishCard(dish) { onDishClick(dish.id) } }
     }
     }
+    DraftSnackbar(viewModel.socketUpdateMessage, viewModel::socketUpdateMessageShown)
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = colors.primary, contentColor = colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить блюдо") }
     when (val loadState = state.loadState) {
         UiState.Loading -> LoadingScreen()
@@ -402,13 +405,7 @@ private fun FeatureLinkCard(
         DishMetric("Низкие остатки", statistics?.lowStock?.toString() ?: "мог", "", Icons.Outlined.Tune, colors.warning),
         DishMetric("В стоп-листе", statistics?.stopList?.toString() ?: "мог", "", Icons.Outlined.PauseCircle, colors.error)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        entries.chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric -> StoqMetricCard(metric.label, metric.value, metric.change, metric.icon, metric.tint, Modifier.weight(1f)) }
-            }
-        }
-    }
+    StoqMetricGrid(entries.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint) })
 }
 
 @Composable private fun DishFilter(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {

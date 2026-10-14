@@ -4,6 +4,7 @@ import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.feature.dishes.data.model.StopListDishDto
 import bob.colbaskin.stoq.feature.dishes.data.model.DishRecommendationDto
 import bob.colbaskin.stoq.feature.dishes.data.realtime.RecommendationsSocketClient
+import bob.colbaskin.stoq.feature.dishes.data.realtime.StopListSocketUpdate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.contentOrNull
@@ -16,6 +17,12 @@ data class StopListDish(
     val dishId: String,
     val reasonTitle: String,
     val reason: String
+)
+
+data class StopListUpdate(
+    val reason: String?,
+    val updatedAt: String?,
+    val items: List<StopListDish>
 )
 
 data class RecommendedDish(
@@ -33,8 +40,12 @@ data class RecommendedDish(
 class RemoteRecommendationsRepository @Inject constructor(
     private val socketClient: RecommendationsSocketClient
 ) {
-    val stopListUpdates: Flow<List<StopListDish>> = socketClient.stopListUpdates.map { items ->
-        items.map(StopListDishDto::toStopListDish)
+    val stopListUpdates: Flow<StopListUpdate> = socketClient.stopListUpdates.map { update ->
+        StopListUpdate(
+            reason = update.reason,
+            updatedAt = update.updatedAt,
+            items = update.items.map(StopListDishDto::toStopListDish)
+        )
     }
 
     suspend fun getStopList(search: String? = null): UiState<List<StopListDish>> = when (

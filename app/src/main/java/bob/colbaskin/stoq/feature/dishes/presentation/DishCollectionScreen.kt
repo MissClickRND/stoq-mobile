@@ -23,7 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
 import bob.colbaskin.stoq.feature.dishes.data.RecommendedDish
 import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
@@ -31,6 +32,7 @@ import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,6 +108,7 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
             ) { onDishClick(dish.id) }
         }
     }
+    DraftSnackbar(viewModel.socketUpdateMessage, viewModel::socketUpdateMessageShown)
     }
     when (val loadState = if (recommended) viewModel.recommendedState else viewModel.stopListState) {
         UiState.Loading -> LoadingScreen()
@@ -152,7 +155,7 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
 
 @Composable private fun CollectionSearch(value: String, onChange: (String) -> Unit) { val c = LocalColors.current; OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Поиск блюд, ингредиентов или причин…", maxLines = 1) }, shape = MaterialTheme.shapes.medium, colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = c.surface, unfocusedContainerColor = c.surface, focusedBorderColor = c.primaryDark, unfocusedBorderColor = c.outline)) }
 
-@Composable private fun CollectionKpis(recommended: Boolean, total: Int) { val c = LocalColors.current; val metrics = if (recommended) listOf(Metric("Всего рекомендуемых блюд", total.toString(), "", Icons.Outlined.Sell, c.success), Metric("Потенциально спасти продуктов", "мог", "", Icons.Outlined.Inventory2, c.success), Metric("Средняя наценка", "мог", "", Icons.Outlined.BarChart, c.success), Metric("Срочных блюд сегодня", "мог", "", Icons.Outlined.AccessTime, c.error)) else listOf(Metric("Всего в стоп-листе", total.toString(), "", Icons.Outlined.WarningAmber, c.error), Metric("Нет ингредиентов", "мог", "", Icons.Outlined.Inventory2, c.warning), Metric("Заблокированы из-за сроков", "мог", "", Icons.Outlined.AccessTime, c.textSecondary), Metric("Потенциальная выручка", "мог", "", Icons.Outlined.BarChart, c.success)); Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { metrics.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { row.forEach { StoqMetricCard(it.label, it.value, it.change, it.icon, it.tint, Modifier.weight(1f)) } } } } }
+@Composable private fun CollectionKpis(recommended: Boolean, total: Int) { val c = LocalColors.current; val metrics = if (recommended) listOf(Metric("Всего рекомендуемых блюд", total.toString(), "", Icons.Outlined.Sell, c.success), Metric("Потенциально спасти продуктов", "мог", "", Icons.Outlined.Inventory2, c.success), Metric("Средняя наценка", "мог", "", Icons.Outlined.BarChart, c.success), Metric("Срочных блюд сегодня", "мог", "", Icons.Outlined.AccessTime, c.error)) else listOf(Metric("Всего в стоп-листе", total.toString(), "", Icons.Outlined.WarningAmber, c.error), Metric("Нет ингредиентов", "мог", "", Icons.Outlined.Inventory2, c.warning), Metric("Заблокированы из-за сроков", "мог", "", Icons.Outlined.AccessTime, c.textSecondary), Metric("Потенциальная выручка", "мог", "", Icons.Outlined.BarChart, c.success)); StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint) }) }
 
 @Composable private fun CollectionFilters(recommended: Boolean, first: String, category: String, delivery: String, markup: String, rating: String, onFirst: (String) -> Unit, onCategory: (String) -> Unit, onDelivery: (String) -> Unit, onMarkup: (String) -> Unit, onRating: (String) -> Unit, onCustomDate: () -> Unit, onReset: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

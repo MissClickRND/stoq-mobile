@@ -22,6 +22,9 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import javax.inject.Singleton
 
+private const val HttpLogTag = "StoqHttp"
+private val SensitiveJsonField = Regex("\\\"(?:password|token|accessToken|refreshToken|email)\\\"\\s*:\\s*\\\"[^\\\"]*\\\"", RegexOption.IGNORE_CASE)
+
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
@@ -37,9 +40,18 @@ object NetworkModule {
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
         .apply {
             if (BuildConfig.DEBUG) {
-                addInterceptor(HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BASIC
-                })
+                addInterceptor(
+                    HttpLoggingInterceptor { message ->
+                        android.util.Log.d(HttpLogTag, message.replace(SensitiveJsonField) { match ->
+                            match.value.substringBefore(':') + ": \"***\""
+                        })
+                    }.apply {
+                        level = HttpLoggingInterceptor.Level.BODY
+                        redactHeader("Authorization")
+                        redactHeader("Cookie")
+                        redactHeader("Set-Cookie")
+                    }
+                )
             }
         }
         .build()
