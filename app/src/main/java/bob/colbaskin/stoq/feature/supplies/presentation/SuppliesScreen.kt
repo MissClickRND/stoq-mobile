@@ -85,6 +85,7 @@ private enum class SupplyStatus { Waiting, OnWay, Accepted, Mismatch }
 @Composable
 fun SuppliesScreen(
     onCreateSupply: () -> Unit,
+    onScanSupply: () -> Unit,
     onSupplyClick: (String) -> Unit,
     onDraftsClick: () -> Unit,
     draftFeedback: String? = null,
@@ -115,7 +116,7 @@ fun SuppliesScreen(
             SearchField(query, { query = it })
         }
         item {
-            UpdBanner()
+            SupplyScanBanner(onScanSupply)
         }
         item { DraftsBanner(viewModel.drafts.size, "поставка", onDraftsClick) }
         item { StorageMetrics(supplies) }
@@ -206,11 +207,11 @@ private fun StorageFilter(text: String, count: String, icon: ImageVector, select
 }
 
 @Composable
-private fun UpdBanner() {
-    Surface(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { }, color = CustomTheme.colors.primary.copy(alpha = .15f), shape = MaterialTheme.shapes.medium) {
+private fun SupplyScanBanner(onClick: () -> Unit) {
+    Surface(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(onClick = onClick), color = CustomTheme.colors.primary.copy(alpha = .15f), shape = MaterialTheme.shapes.medium) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(42.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .24f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.CameraAlt, null, tint = CustomTheme.colors.success) }
-            Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("Сканировать УПД", style = MaterialTheme.typography.titleMedium); Text("Быстро создайте поставку, отсканировав QR-код из УПД поставщика", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Spacer(Modifier.width(10.dp)); Column(Modifier.weight(1f)) { Text("Сканировать УПД", style = MaterialTheme.typography.titleMedium); Text("Сфотографируйте УПД или выберите готовое фото", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Surface(shape = MaterialTheme.shapes.small, color = CustomTheme.colors.primary) { Text("Сканировать", Modifier.padding(horizontal = 11.dp, vertical = 10.dp), style = MaterialTheme.typography.labelMedium) }
         }
     }
@@ -297,7 +298,9 @@ data class SupplyDraftPayload(
 fun CreateSupplyScreen(
     onBack: () -> Unit,
     onSuppliesClick: () -> Unit,
+    onScanSupply: () -> Unit,
     draftId: String? = null,
+    scanToken: String? = null,
     viewModel: CreateSupplyViewModel = hiltViewModel()
 ) {
     var name by remember { mutableStateOf("") }
@@ -317,6 +320,9 @@ fun CreateSupplyScreen(
             viewModel.loadDraft(draftId)
         }
     }
+    LaunchedEffect(scanToken) {
+        scanToken?.let(viewModel::consumeAiRecognition)
+    }
     LaunchedEffect(viewModel.restoredDraft) {
         viewModel.restoredDraft?.let { draft ->
             name = draft.name
@@ -324,6 +330,23 @@ fun CreateSupplyScreen(
             supplier = draft.supplier
             products = draft.products
             hasUnsavedChanges = false
+        }
+    }
+    LaunchedEffect(viewModel.aiRecognition) {
+        viewModel.aiRecognition?.let { recognition ->
+            supplier = recognition.sellerName.orEmpty()
+            products = recognition.items.map { item ->
+                SupplyProduct(
+                    productId = item.productId,
+                    name = item.name,
+                    category = item.unit ?: "мог",
+                    quantity = item.quantity.toSupplyNumber(),
+                    price = item.price.toSupplyNumber(),
+                    batch = "мог",
+                    expires = "Укажите срок"
+                )
+            }
+            hasUnsavedChanges = products.isNotEmpty() || supplier.isNotBlank()
         }
     }
     val currentDraft = SupplyDraftPayload(name, date, supplier, products)
@@ -340,8 +363,11 @@ fun CreateSupplyScreen(
             }
         }
         item {
+            SupplyScanBanner(onClick = onScanSupply)
+        }
+        item {
             StoqCard {
-                CompactTextField(name, { name = it; hasUnsavedChanges = true }, "Название *", modifier = Modifier.fillMaxWidth())
+                CompactTextField(name, { name = it; hasUnsavedChanges = true }, "Номер поставки *", modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DateField(date, { showDatePicker = true }, Modifier.weight(1f))
@@ -351,7 +377,7 @@ fun CreateSupplyScreen(
         }
         item {
             StoqCard {
-                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Продукты в поставке", style = MaterialTheme.typography.titleLarge); Text("Добавьте продукты, укажите количество и проверьте данные", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Box(Modifier.size(44.dp).clip(CircleShape).background(CustomTheme.colors.primary.copy(alpha = .15f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.CameraAlt, "Сфотографировать УПД", tint = CustomTheme.colors.success) } }
+                Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Продукты в поставке", style = MaterialTheme.typography.titleLarge); Text("Добавьте продукты, укажите количество и проверьте данные", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                 Spacer(Modifier.height(10.dp))
                 SearchField(
                     value = search,
@@ -492,6 +518,7 @@ private fun ProductPriceSummary(price: String, quantity: String) {
 
 private fun formatRubles(value: Int): String = String.format(java.util.Locale("ru"), "%,d", value).replace(',', ' ')
 private fun Double.toRubles(): String = "${formatRubles(toInt())} ₽"
+private fun Double?.toSupplyNumber(): String = this?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty()
 
 private fun String.toIsoDateTime(): String {
     val parts = trim().removePrefix("Годен до: ").split('.')

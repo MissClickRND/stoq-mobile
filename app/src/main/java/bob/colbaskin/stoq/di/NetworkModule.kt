@@ -4,10 +4,12 @@ import bob.colbaskin.stoq.BuildConfig
 import bob.colbaskin.stoq.feature.auth.data.remote.AuthApiService
 import bob.colbaskin.stoq.feature.dishes.data.remote.DishesApiService
 import bob.colbaskin.stoq.feature.dishes.data.remote.RecommendationsApiService
+import bob.colbaskin.stoq.feature.dashboard.data.remote.StatisticsApiService
 import bob.colbaskin.stoq.feature.products.data.remote.InventoryApiService
 import bob.colbaskin.stoq.feature.products.data.remote.ProductsApiService
 import bob.colbaskin.stoq.feature.orders.data.remote.OrdersApiService
 import bob.colbaskin.stoq.feature.supplies.data.remote.SuppliesApiService
+import bob.colbaskin.stoq.feature.supplies.data.ai.AiSupplyApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -67,6 +69,10 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideStatisticsApiService(retrofit: Retrofit): StatisticsApiService = retrofit.create(StatisticsApiService::class.java)
+
+    @Provides
+    @Singleton
     fun provideInventoryApiService(retrofit: Retrofit): InventoryApiService = retrofit.create(InventoryApiService::class.java)
 
     @Provides
@@ -76,6 +82,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideSuppliesApiService(retrofit: Retrofit): SuppliesApiService = retrofit.create(SuppliesApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAiSupplyApiService(retrofit: Retrofit): AiSupplyApiService = retrofit.create(AiSupplyApiService::class.java)
 
     @Provides
     @Singleton

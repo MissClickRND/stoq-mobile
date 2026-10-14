@@ -20,6 +20,7 @@ import bob.colbaskin.stoq.feature.dishes.presentation.DishDetailsScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishCollectionScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishesScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.CreateSupplyScreen
+import bob.colbaskin.stoq.feature.supplies.presentation.SupplyScanScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SuppliesScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SupplyDetailsScreen
 import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
@@ -68,7 +69,9 @@ private data class CreateOrderDestination(val draftId: String? = null)
 private data class EditOrderDestination(val orderId: String)
 
 @Serializable
-private data class CreateSupplyDestination(val draftId: String? = null)
+private data class CreateSupplyDestination(val draftId: String? = null, val scanToken: String? = null)
+@Serializable
+private data object SupplyScanDestination
 
 @Serializable
 private data class DraftsDestination(val type: String, val excludeDraftId: String? = null)
@@ -173,6 +176,7 @@ fun MainNavigation(user: AuthUser?) {
                 val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
                 SuppliesScreen(
                     onCreateSupply = { navController.navigate(CreateSupplyDestination()) },
+                    onScanSupply = { navController.navigate(SupplyScanDestination) },
                     onSupplyClick = { supplyNumber -> navController.navigate(SupplyDetailsDestination(supplyNumber)) },
                     onDraftsClick = { navController.navigate(DraftsDestination("supply")) },
                     draftFeedback = draftFeedback,
@@ -182,13 +186,25 @@ fun MainNavigation(user: AuthUser?) {
             composable<CreateSupplyDestination> { entry ->
                 CreateSupplyScreen(
                     onBack = { navController.popBackStack() },
+                    onScanSupply = { navController.navigate(SupplyScanDestination) },
                     onSuppliesClick = {
                         navController.getBackStackEntry(SupplyRoute).savedStateHandle["draft_feedback"] = "Черновик сохранён"
                         if (!navController.popBackStack(SupplyRoute, inclusive = false)) {
                             navController.navigate(SupplyRoute) { launchSingleTop = true }
                         }
                     },
-                    draftId = entry.toRoute<CreateSupplyDestination>().draftId
+                    draftId = entry.toRoute<CreateSupplyDestination>().draftId,
+                    scanToken = entry.toRoute<CreateSupplyDestination>().scanToken
+                )
+            }
+            composable<SupplyScanDestination> {
+                SupplyScanScreen(
+                    onBack = navController::popBackStack,
+                    onRecognized = { token ->
+                        navController.navigate(CreateSupplyDestination(scanToken = token)) {
+                            popUpTo<SupplyScanDestination> { inclusive = true }
+                        }
+                    }
                 )
             }
             composable<SupplyDetailsDestination> { entry ->

@@ -507,14 +507,16 @@ private fun OrderSearch(value: String, orders: List<Order>, onChange: (String) -
 
 @Composable
 private fun MetricsGrid(state: OrdersState) = Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val statistics = state.todayStatistics
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Metric("Всего заказов сегодня", state.metrics.totalToday.toString(), "+12%", Icons.Outlined.LocalDining, CustomTheme.colors.success, Modifier.weight(1f))
-        Metric("В обработке", state.metrics.processing.toString(), "+25%", Icons.Outlined.Refresh, CustomTheme.colors.warning, Modifier.weight(1f))
+        Metric("Всего заказов сегодня", statistics?.total?.toString() ?: "мог", "", Icons.Outlined.LocalDining, CustomTheme.colors.success, Modifier.weight(1f))
+        Metric("В обработке", statistics?.active?.toString() ?: "мог", "", Icons.Outlined.Refresh, CustomTheme.colors.warning, Modifier.weight(1f))
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Metric("Выполнено", state.metrics.completed.toString(), "+14%", Icons.Outlined.Check, CustomTheme.colors.success, Modifier.weight(1f))
-        Metric("Выручка от заказов", money(state.metrics.revenue), "+23%", Icons.Outlined.LocalDining, CustomTheme.colors.success, Modifier.weight(1f))
+        Metric("Выполнено", statistics?.completed?.toString() ?: "мог", "", Icons.Outlined.Check, CustomTheme.colors.success, Modifier.weight(1f))
+        Metric("Отменено", statistics?.cancelled?.toString() ?: "мог", "", Icons.Outlined.Close, CustomTheme.colors.error, Modifier.weight(1f))
     }
+    Metric("Выручка от заказов", statistics?.revenue?.let(::money) ?: "мог", "", Icons.Outlined.LocalDining, CustomTheme.colors.success, Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -525,7 +527,7 @@ private fun Metric(title: String, value: String, growth: String, icon: androidx.
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
             Text(value, style = MaterialTheme.typography.titleLarge, maxLines = 1)
-            Text("↑ $growth", style = MaterialTheme.typography.bodySmall, color = tint, fontWeight = FontWeight.Bold)
+            if (growth.isNotBlank()) Text("↑ $growth", style = MaterialTheme.typography.bodySmall, color = tint, fontWeight = FontWeight.Bold)
         }
     }
 }

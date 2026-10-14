@@ -6,6 +6,8 @@ import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.drafts.data.Draft
 import bob.colbaskin.stoq.common.drafts.data.DraftRepository
 import bob.colbaskin.stoq.common.drafts.data.DraftType
+import bob.colbaskin.stoq.feature.dashboard.data.RemoteStatisticsRepository
+import bob.colbaskin.stoq.feature.dashboard.data.model.OrdersTodayStatistics
 import bob.colbaskin.stoq.feature.orders.domain.OrderRepository
 import bob.colbaskin.stoq.feature.orders.domain.model.Order
 import bob.colbaskin.stoq.feature.orders.domain.model.OrderItem
@@ -14,6 +16,7 @@ import bob.colbaskin.stoq.feature.orders.domain.model.OrderStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -29,6 +32,8 @@ data class OrdersState(
     val menu: List<OrderItem> = emptyList(),
     val allMenu: List<OrderItem> = emptyList(),
     val metrics: OrderMetrics = OrderMetrics(0, 0, 0, 0),
+    val todayStatistics: OrdersTodayStatistics? = null,
+    val statisticsState: UiState<OrdersTodayStatistics>? = null,
     val loadState: UiState<Unit> = UiState.Loading,
     val query: String = "",
     val status: OrderStatus? = null,
@@ -73,7 +78,8 @@ private data class OrderDraftItem(val dishId: String, val quantity: Int)
 @HiltViewModel
 class OrdersViewModel @Inject constructor(
     private val repository: OrderRepository,
-    private val draftsRepository: DraftRepository
+    private val draftsRepository: DraftRepository,
+    private val statisticsRepository: RemoteStatisticsRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(OrdersState())
     val state = _state.asStateFlow()
@@ -172,11 +178,24 @@ class OrdersViewModel @Inject constructor(
     private fun refresh() = viewModelScope.launch {
         val hasData = _state.value.orders.isNotEmpty()
         _state.update { if (hasData) it.copy(isRefreshing = true) else it.copy(loadState = UiState.Loading) }
-        val orders = repository.orders()
-        val menu = repository.menu()
+        val ordersRequest = async { repository.orders() }
+        val menuRequest = async { repository.menu() }
+        val statisticsRequest = async { statisticsRepository.ordersToday() }
+        val orders = ordersRequest.await()
+        val menu = menuRequest.await()
+        val statistics = statisticsRequest.await()
         when {
             orders is UiState.Success && menu is UiState.Success -> _state.update {
-                it.copy(orders = orders.data, menu = menu.data, allMenu = menu.data, metrics = repository.metrics(orders.data), loadState = UiState.Success(Unit), isRefreshing = false)
+                it.copy(
+                    orders = orders.data,
+                    menu = menu.data,
+                    allMenu = menu.data,
+                    metrics = repository.metrics(orders.data),
+                    todayStatistics = (statistics as? UiState.Success)?.data ?: it.todayStatistics,
+                    statisticsState = statistics,
+                    loadState = UiState.Success(Unit),
+                    isRefreshing = false
+                )
             }
             orders is UiState.Error -> _state.update { it.copy(loadState = if (hasData) it.loadState else orders, isRefreshing = false, error = if (hasData) orders.text else it.error) }
             menu is UiState.Error -> _state.update { it.copy(loadState = if (hasData) it.loadState else menu, isRefreshing = false, error = if (hasData) menu.text else it.error) }

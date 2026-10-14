@@ -42,6 +42,7 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
+import bob.colbaskin.stoq.feature.dashboard.data.model.DishesStatistics
 import bob.colbaskin.stoq.feature.products.data.model.ProductDto
 
 private data class DishIngredientDraft(
@@ -84,7 +85,7 @@ fun DishesScreen(
             Spacer(Modifier.height(StoqSpacing.Large))
             SearchBar(state.query, state.dishes, viewModel::updateQuery, onDishClick)
             Spacer(Modifier.height(StoqSpacing.Medium))
-            DishSummary(allDishes)
+            DishSummary(allDishes, state.statistics)
             Spacer(Modifier.height(StoqSpacing.Medium))
             DishFeatureLinks(onStopListClick, onRecommendationsClick)
             Spacer(Modifier.height(StoqSpacing.Medium))
@@ -393,13 +394,13 @@ private fun FeatureLinkCard(
     }
 }
 
-@Composable private fun DishSummary(dishes: List<Dish>) {
+@Composable private fun DishSummary(dishes: List<Dish>, statistics: DishesStatistics?) {
     val colors = LocalColors.current
     val entries = listOf(
-        DishMetric("Всего блюд", dishes.size.toString(), "+12%", Icons.Outlined.Inventory2, colors.success),
-        DishMetric("Активных блюд", dishes.count { it.active }.toString(), "+8%", Icons.Outlined.CheckCircle, colors.success),
-        DishMetric("В стоп-листе", dishes.count { !it.active }.toString(), "−25%", Icons.Outlined.PauseCircle, colors.error),
-        DishMetric("Средняя наценка", dishes.map { it.markup }.filter { it >= 0 }.takeIf { it.isNotEmpty() }?.average()?.toInt()?.let { "$it%" } ?: "мог", "", Icons.Outlined.Tune, colors.primaryDark)
+        DishMetric("Всего блюд", statistics?.total?.toString() ?: "мог", "", Icons.Outlined.Inventory2, colors.success),
+        DishMetric("Активных блюд", statistics?.active?.toString() ?: "мог", "", Icons.Outlined.CheckCircle, colors.success),
+        DishMetric("Низкие остатки", statistics?.lowStock?.toString() ?: "мог", "", Icons.Outlined.Tune, colors.warning),
+        DishMetric("В стоп-листе", statistics?.stopList?.toString() ?: "мог", "", Icons.Outlined.PauseCircle, colors.error)
     )
     Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
         entries.chunked(2).forEach { row ->

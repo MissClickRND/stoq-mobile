@@ -14,6 +14,7 @@ import bob.colbaskin.stoq.feature.products.data.model.ProductDto
 import bob.colbaskin.stoq.feature.supplies.data.RemoteSupplyRepository
 import bob.colbaskin.stoq.feature.supplies.data.Supply
 import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyDto
+import bob.colbaskin.stoq.feature.supplies.data.ai.AiSupplyRecognition
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -82,7 +83,8 @@ class SupplyDetailsViewModel @Inject constructor(
 class CreateSupplyViewModel @Inject constructor(
     private val supplyRepository: RemoteSupplyRepository,
     private val productRepository: RemoteProductRepository,
-    private val draftsRepository: DraftRepository
+    private val draftsRepository: DraftRepository,
+    private val aiSupplySession: AiSupplySession
 ) : ViewModel() {
     var products by mutableStateOf<List<ProductDto>>(emptyList())
         private set
@@ -92,6 +94,8 @@ class CreateSupplyViewModel @Inject constructor(
     var restoredDraft by mutableStateOf<SupplyDraftPayload?>(null)
         private set
     var draftMessage by mutableStateOf<String?>(null)
+        private set
+    var aiRecognition by mutableStateOf<AiSupplyRecognition?>(null)
         private set
     private var draftId: String? = null
     private var productSearchJob: Job? = null
@@ -139,6 +143,10 @@ class CreateSupplyViewModel @Inject constructor(
         draftId = record.id
         restoredDraft = draft
         draftMessage = "Черновик восстановлен"
+    }
+
+    fun consumeAiRecognition(token: String) {
+        aiRecognition = aiSupplySession.take(token)
     }
 
     fun saveDraft(draft: SupplyDraftPayload, onSaved: (() -> Unit)? = null, showMessage: Boolean = true) {
