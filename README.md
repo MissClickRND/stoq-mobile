@@ -60,8 +60,6 @@ BASE_API_URL=example.com/api/
 
 ## Скриншоты
 
-### Скриншоты для RuStore
-
 <p align="center">
   <img src="screenshots/rustore/01-overview.jpg" width="220" alt="Дашборд и аналитика" />
   <img src="screenshots/rustore/02-inventory.jpg" width="220" alt="Склад и остатки" />
