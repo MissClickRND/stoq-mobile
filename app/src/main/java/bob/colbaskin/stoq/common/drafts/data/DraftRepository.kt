@@ -2,6 +2,10 @@ package bob.colbaskin.stoq.common.drafts.data
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import bob.colbaskin.stoq.common.userprefs.domain.UserPreferencesRepository
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,10 +23,13 @@ data class Draft(
 
 @Singleton
 class DraftRepository @Inject constructor(
-    private val draftDao: DraftDao
+    private val draftDao: DraftDao,
+    private val preferences: UserPreferencesRepository
 ) {
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun observe(type: DraftType? = null): Flow<List<Draft>> =
-        (type?.let { draftDao.observeByType(it.name) } ?: draftDao.observeAll()).map { entities ->
+        preferences.getUserPreferences().map { it.user?.let { user -> "${user.restaurantId}:${user.id}" }.orEmpty() }
+        .distinctUntilChanged().flatMapLatest { owner -> draftDao.observeOwned(owner, type?.name) }.map { entities ->
             entities.map(DraftEntity::toDraft)
         }
 
@@ -41,13 +48,19 @@ class DraftRepository @Inject constructor(
             updatedAtEpochMillis = System.currentTimeMillis(),
             payloadJson = payloadJson
         )
-        draftDao.upsert(draft.toEntity())
+        val owner = ownerKey()
+        if (owner.isBlank()) return draft
+        draftDao.upsert(draft.toEntity().copy(ownerKey = owner))
         return draft
     }
 
-    suspend fun delete(id: String) = draftDao.deleteById(id)
+    suspend fun delete(id: String) {
+        if (draftDao.findById(id)?.ownerKey == ownerKey()) draftDao.deleteById(id)
+    }
 
-    suspend fun find(id: String): Draft? = draftDao.findById(id)?.toDraft()
+    suspend fun find(id: String): Draft? = draftDao.findById(id)?.takeIf { it.ownerKey == ownerKey() }?.toDraft()
+
+    private suspend fun ownerKey(): String = preferences.getUserPreferences().first().user?.let { "${it.restaurantId}:${it.id}" }.orEmpty()
 }
 
 private val DraftType.defaultTitle: String

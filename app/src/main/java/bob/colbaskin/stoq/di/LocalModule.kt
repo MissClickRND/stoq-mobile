@@ -29,7 +29,7 @@ object LocalModule {
         context,
         StoqDatabase::class.java,
         "stoq.db"
-    ).build()
+    ).addMigrations(bob.colbaskin.stoq.common.drafts.data.DraftOwnerMigration).build()
 
     @Provides
     @Singleton
