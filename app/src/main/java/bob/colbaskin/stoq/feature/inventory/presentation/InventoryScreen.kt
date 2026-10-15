@@ -346,9 +346,13 @@ private fun EditableActualQuantity(
                             IconButton(
                                 onClick = {
                                     parsedValue?.let {
-                                        onQuantityChanged(it.coerceAtLeast(0.0))
-                                        onConfirmed()
-                                        editing = false
+                                        if (it.coerceAtLeast(0.0) == 0.0) {
+                                            showWriteOffDialog = true
+                                        } else {
+                                            onQuantityChanged(it)
+                                            onConfirmed()
+                                            editing = false
+                                        }
                                     }
                                 },
                                 enabled = parsedValue != null
