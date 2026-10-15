@@ -95,7 +95,6 @@ BASE_API_URL=example.com/api/
 | **ZXing** | Формирование QR-кода гостевого заказа |
 | **Tabler Icons + Material Icons** | Иконки интерфейса |
 | **Secrets Gradle Plugin** | Локальная конфигурация API вне Git |
-| **JUnit + Compose UI Test** | Проверки логики, сетевых контрактов и интерфейса |
 
 ## Установка
 
