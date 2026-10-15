@@ -5,6 +5,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,6 +16,8 @@ import bob.colbaskin.stoq.common.designsystem.components.BottomBarItem
 import bob.colbaskin.stoq.common.designsystem.components.StoqBottomBar
 import bob.colbaskin.stoq.common.designsystem.components.StoqTopBar
 import bob.colbaskin.stoq.feature.auth.domain.model.AuthUser
+import bob.colbaskin.stoq.feature.main.domain.AppSection
+import bob.colbaskin.stoq.feature.main.domain.accessibleSections
 import bob.colbaskin.stoq.feature.dashboard.presentation.DashboardScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishDetailsScreen
 import bob.colbaskin.stoq.feature.dishes.presentation.DishCollectionScreen
@@ -103,10 +106,29 @@ private val mainSections = listOf(
 
 @Composable
 fun MainNavigation(user: AuthUser?) {
+    key(user?.id, user?.restaurantId, user?.role) {
+        RoleNavigation(user)
+    }
+}
+
+@Composable
+private fun RoleNavigation(user: AuthUser?) {
+    val sections = user?.role.accessibleSections()
+    val visibleSections = mainSections.filter { item ->
+        when (item.route) {
+            DashboardRoute -> AppSection.Dashboard
+            ProductsRoute -> AppSection.Storage
+            SupplyRoute -> AppSection.Supplies
+            OrdersRoute -> AppSection.Orders
+            DishesRoute -> AppSection.Dishes
+            else -> AppSection.Admin
+        } in sections
+    }
+    val startRoute = visibleSections.firstOrNull()?.route ?: profileRoute
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val showBottomBar = mainSections.any { it.route == currentRoute }
+    val showBottomBar = visibleSections.any { it.route == currentRoute }
 
     Scaffold(
         topBar = {
@@ -119,7 +141,7 @@ fun MainNavigation(user: AuthUser?) {
         bottomBar = {
             if (showBottomBar) {
                 StoqBottomBar(
-                    items = mainSections,
+                    items = visibleSections,
                     selectedRoute = currentRoute,
                     onItemSelected = { section ->
                         if (section.route == currentRoute) {
@@ -128,7 +150,7 @@ fun MainNavigation(user: AuthUser?) {
                             Unit
                         } else {
                             navController.navigate(section.route) {
-                                popUpTo(DashboardRoute) { saveState = true }
+                                popUpTo(startRoute) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
@@ -140,10 +162,10 @@ fun MainNavigation(user: AuthUser?) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = DashboardRoute,
+            startDestination = startRoute,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(DashboardRoute) {
+            if (AppSection.Dashboard in sections) composable(DashboardRoute) {
                 DashboardScreen(
                     onProductsClick = { navController.navigate(ProductsRoute) { launchSingleTop = true } },
                     onDishesClick = { navController.navigate(DishesRoute) { launchSingleTop = true } },
@@ -151,7 +173,7 @@ fun MainNavigation(user: AuthUser?) {
                     onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId.toString())) }
                 )
             }
-            composable(ProductsRoute) { entry ->
+            if (AppSection.Storage in sections) composable(ProductsRoute) { entry ->
                 val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
                 StorageScreen(
                     onInventoryClick = { navController.navigate(InventoryDestination()) },
@@ -161,7 +183,7 @@ fun MainNavigation(user: AuthUser?) {
                     onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
                 )
             }
-            composable<InventoryDestination> { entry ->
+            if (AppSection.Storage in sections) composable<InventoryDestination> { entry ->
                 InventoryScreen(
                     onBack = navController::popBackStack,
                     onStorageClick = {
@@ -177,7 +199,7 @@ fun MainNavigation(user: AuthUser?) {
             composable<ProfileDestination> {
                 user?.let { ProfileScreen(user = it, onBack = navController::popBackStack) }
             }
-            composable(SupplyRoute) { entry ->
+            if (AppSection.Supplies in sections) composable(SupplyRoute) { entry ->
                 val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
                 SuppliesScreen(
                     onCreateSupply = { navController.navigate(CreateSupplyDestination()) },
@@ -188,7 +210,7 @@ fun MainNavigation(user: AuthUser?) {
                     onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
                 )
             }
-            composable<CreateSupplyDestination> { entry ->
+            if (AppSection.Supplies in sections) composable<CreateSupplyDestination> { entry ->
                 CreateSupplyScreen(
                     onBack = { navController.popBackStack() },
                     onScanSupply = { navController.navigate(SupplyScanDestination) },
@@ -202,7 +224,7 @@ fun MainNavigation(user: AuthUser?) {
                     scanToken = entry.toRoute<CreateSupplyDestination>().scanToken
                 )
             }
-            composable<SupplyScanDestination> {
+            if (AppSection.Supplies in sections) composable<SupplyScanDestination> {
                 SupplyScanScreen(
                     onBack = navController::popBackStack,
                     onRecognized = { token ->
@@ -212,20 +234,20 @@ fun MainNavigation(user: AuthUser?) {
                     }
                 )
             }
-            composable<SupplyDetailsDestination> { entry ->
+            if (AppSection.Supplies in sections) composable<SupplyDetailsDestination> { entry ->
                 SupplyDetailsScreen(
                     supplyNumber = entry.toRoute<SupplyDetailsDestination>().supplyNumber,
                     onBack = navController::popBackStack
                 )
             }
-            composable<ProductDetailsDestination> { entry ->
+            if (AppSection.Storage in sections) composable<ProductDetailsDestination> { entry ->
                 ProductDetailsScreen(
                     productId = entry.toRoute<ProductDetailsDestination>().productId,
                     onBack = navController::popBackStack,
                     onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) }
                 )
             }
-            composable(OrdersRoute) { entry ->
+            if (AppSection.Orders in sections) composable(OrdersRoute) { entry ->
                 val draftFeedback by entry.savedStateHandle.getStateFlow<String?>("draft_feedback", null).collectAsState()
                 OrdersScreen(
                     onCreateOrder = { navController.navigate(CreateOrderDestination()) },
@@ -236,7 +258,7 @@ fun MainNavigation(user: AuthUser?) {
                     onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
                 )
             }
-            composable<CreateOrderDestination> { entry ->
+            if (AppSection.Orders in sections) composable<CreateOrderDestination> { entry ->
                 CreateOrderScreen(
                     onBack = { navController.popBackStack() },
                     onOrdersClick = {
@@ -248,7 +270,7 @@ fun MainNavigation(user: AuthUser?) {
                     draftId = entry.toRoute<CreateOrderDestination>().draftId
                 )
             }
-            composable<EditOrderDestination> { entry ->
+            if (AppSection.Orders in sections) composable<EditOrderDestination> { entry ->
                 CreateOrderScreen(
                     onBack = navController::popBackStack,
                     onOrdersClick = {
@@ -261,6 +283,15 @@ fun MainNavigation(user: AuthUser?) {
             }
             composable<DraftsDestination> { entry ->
                 val destination = entry.toRoute<DraftsDestination>()
+                val draftSection = when (destination.type) {
+                    "supply" -> AppSection.Supplies
+                    "inventory" -> AppSection.Storage
+                    else -> AppSection.Orders
+                }
+                if (draftSection !in sections) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                    return@composable
+                }
                 val type = when (destination.type) {
                     "supply" -> DraftType.Supply
                     "inventory" -> DraftType.Inventory
@@ -286,35 +317,35 @@ fun MainNavigation(user: AuthUser?) {
                     onDelete = draftsViewModel::delete
                 )
             }
-            composable<OrderDetailsDestination> { entry ->
+            if (AppSection.Orders in sections) composable<OrderDetailsDestination> { entry ->
                 OrderDetailsScreen(
                     orderId = entry.toRoute<OrderDetailsDestination>().orderId,
                     onBack = navController::popBackStack,
                     onEditOrder = { navController.navigate(EditOrderDestination(it)) }
                 )
             }
-            composable(DishesRoute) {
+            if (AppSection.Dishes in sections) composable(DishesRoute) {
                 DishesScreen(
                     onDishClick = { dishId -> navController.navigate(DishDetailsDestination(dishId)) },
                     onStopListClick = { navController.navigate(DishCollectionDestination(recommended = false)) },
                     onRecommendationsClick = { navController.navigate(DishCollectionDestination(recommended = true)) }
                 )
             }
-            composable<DishDetailsDestination> { entry ->
+            if (AppSection.Dishes in sections) composable<DishDetailsDestination> { entry ->
                 DishDetailsScreen(
                     id = entry.toRoute<DishDetailsDestination>().dishId,
                     onBack = navController::popBackStack,
                     onStorageClick = { navController.navigate(ProductsRoute) { launchSingleTop = true } }
                 )
             }
-            composable<DishCollectionDestination> { entry ->
+            if (AppSection.Dishes in sections) composable<DishCollectionDestination> { entry ->
                 DishCollectionScreen(
                     recommended = entry.toRoute<DishCollectionDestination>().recommended,
                     onBack = navController::popBackStack,
                     onDishClick = { dishId -> navController.navigate(DishDetailsDestination(dishId)) }
                 )
             }
-            composable<AdminDestination> {
+            if (AppSection.Admin in sections) composable<AdminDestination> {
                 AdminScreen()
             }
         }

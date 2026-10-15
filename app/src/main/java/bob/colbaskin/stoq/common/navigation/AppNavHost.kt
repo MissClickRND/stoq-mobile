@@ -41,7 +41,7 @@ data object AuthenticatedDestination
 
 @Composable
 fun AppNavHost(uiState: UiState.Success<UserPreferences>) {
-    key(uiState.data.authStatus) {
+    key(uiState.data.authStatus, uiState.data.user?.id) {
         val navController = rememberNavController()
 
         NavHost(navController = navController, startDestination = getRootStartDestination(uiState.data.authStatus)) {
@@ -109,7 +109,7 @@ private fun AccessRequestSentScreen(onBackToSignIn: () -> Unit) {
     ) {
         Text(text = "Заявка отправлена", style = MaterialTheme.typography.headlineMedium)
         Text(
-            text = "Мы сообщим на рабочую почту, когда доступ будет предоставлен.",
+            text = "Дождитесь подтверждения администратора ресторана, затем войдите с указанными почтой и паролем.",
             modifier = Modifier.padding(top = StoqSpacing.Small),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
