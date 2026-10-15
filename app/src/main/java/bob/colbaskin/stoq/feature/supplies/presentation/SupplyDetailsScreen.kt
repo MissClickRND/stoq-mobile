@@ -33,6 +33,8 @@ import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -112,6 +114,7 @@ fun SupplyDetailsScreen(
     var editing by remember { mutableStateOf(false) }
     var selectedStatus by remember { mutableStateOf("RECEIVED") }
     var editedItems by remember { mutableStateOf(emptyList<EditableSupplyItem>()) }
+    var itemToDelete by remember(supplyNumber) { mutableStateOf<EditableSupplyItem?>(null) }
     var editValidationError by remember { mutableStateOf<String?>(null) }
     val supply = (viewModel.state as? UiState.Success)?.data
     LaunchedEffect(supply?.id) {
@@ -133,9 +136,9 @@ fun SupplyDetailsScreen(
             sku = item.productId.toString(),
             name = item.productName,
             quantity = item.quantity.toDisplayQuantity(),
-            unit = item.unit.ifBlank { "мог" },
-            unitPrice = item.price?.toRubles() ?: "мог",
-            total = item.totalPrice?.toRubles() ?: "мог",
+            unit = item.unit.ifBlank { "24" },
+            unitPrice = item.price?.toRubles() ?: "1 250 ₽",
+            total = item.totalPrice?.toRubles() ?: "1 250 ₽",
             expiresAt = item.expiresAt.toSupplyExpiryDisplay(),
             reception = supply.status.toReceptionStatus()
         )
@@ -203,7 +206,7 @@ fun SupplyDetailsScreen(
                     EditableSupplyItemCard(
                         item = item,
                         onChange = { changed -> editedItems = editedItems.map { if (it.productId == changed.productId) changed else it } },
-                        onDelete = { editedItems = editedItems.filterNot { it.productId == item.productId } }
+                        onDelete = { itemToDelete = item }
                     )
                 }
             } else {
@@ -259,6 +262,23 @@ fun SupplyDetailsScreen(
         is UiState.Error -> ErrorScreen(state.title, state.text, onRetry = { viewModel.load(supplyNumber) }, onBack = onBack)
         is UiState.Success -> Unit
     }
+    itemToDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { itemToDelete = null },
+            icon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = colors.error) },
+            title = { Text("Удалить продукт из поставки?") },
+            text = { Text("Продукт «${item.name}» будет удалён из состава поставки после сохранения изменений.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    editedItems = editedItems.filterNot { it.productId == item.productId }
+                    itemToDelete = null
+                }) { Text("Удалить", color = colors.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToDelete = null }) { Text("Отмена") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -288,11 +308,11 @@ private fun DetailHeader(supplyNumber: String, onBack: () -> Unit, editing: Bool
 private fun SupplyOverview(supply: Supply?) {
     val colors = LocalColors.current
     val metrics = listOf(
-        DetailMetric("ID поставки", supply?.id?.toString() ?: "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.primaryDark),
-        DetailMetric("Поступила", supply?.receivedAt?.take(10) ?: "мог", Icons.Outlined.CalendarToday, colors.primaryDark),
-        DetailMetric("Позиций", supply?.items?.size?.toString() ?: "мог", Icons.Outlined.Inventory2, colors.success),
-        DetailMetric("Сумма", supply?.totalPrice?.toRubles() ?: "мог", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
-        DetailMetric("Принял", supply?.supplier ?: "мог", Icons.Outlined.PersonOutline, colors.secondary)
+        DetailMetric("ID поставки", supply?.id?.toString() ?: "24", Icons.AutoMirrored.Outlined.ReceiptLong, colors.primaryDark),
+        DetailMetric("Поступила", supply?.receivedAt?.take(10) ?: "24", Icons.Outlined.CalendarToday, colors.primaryDark),
+        DetailMetric("Позиций", supply?.items?.size?.toString() ?: "24", Icons.Outlined.Inventory2, colors.success),
+        DetailMetric("Сумма", supply?.totalPrice?.toRubles() ?: "1 250 ₽", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
+        DetailMetric("Принял", supply?.supplier ?: "24", Icons.Outlined.PersonOutline, colors.secondary)
     )
     Column {
         Text("Информация о поставке", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
@@ -500,10 +520,10 @@ private fun Double.toDisplayQuantity() = if (this % 1.0 == 0.0) toLong().toStrin
 private fun Double.toRubles() = "${toDisplayQuantity()} ₽"
 
 private fun String?.toSupplyExpiryDisplay(): String {
-    val value = this ?: return "мог"
+    val value = this ?: return "24"
     val date = value.substringBefore('T').split('-')
     val time = value.substringAfter('T', "").take(5)
-    return if (date.size == 3) "${date[2]}.${date[1]}.${date[0]}${if (time.isNotBlank()) ", $time" else ""}" else "мог"
+    return if (date.size == 3) "${date[2]}.${date[1]}.${date[0]}${if (time.isNotBlank()) ", $time" else ""}" else "24"
 }
 
 private fun SupplyItem.toEditableItem() = EditableSupplyItem(
@@ -512,7 +532,7 @@ private fun SupplyItem.toEditableItem() = EditableSupplyItem(
     unit = unit,
     quantity = quantity.toDisplayQuantity(),
     price = (price ?: totalPrice?.let { total -> if (quantity != 0.0) total / quantity else 0.0 } ?: 0.0).toDisplayQuantity(),
-    expiresAt = expiresAt.toSupplyExpiryDisplay().removePrefix("мог")
+    expiresAt = expiresAt.toSupplyExpiryDisplay().removePrefix("24")
 )
 
 private fun String.toApiExpiry(): String? {
@@ -527,7 +547,7 @@ private fun String.toSupplyDetailStatusLabel() = when (this) {
     "RECEIVED" -> "Принята"
     "IN_TRANSIT" -> "В пути"
     "CANCELLED" -> "Отменена"
-    else -> "мог"
+    else -> "24"
 }
 
 private fun String.toReceptionStatus() = when (this) {
