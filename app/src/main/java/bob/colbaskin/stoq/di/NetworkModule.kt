@@ -37,7 +37,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    fun provideOkHttpClient(
+        cookieJar: bob.colbaskin.stoq.common.network.SessionCookieJar,
+        authenticator: bob.colbaskin.stoq.common.network.SessionAuthenticator
+    ): OkHttpClient = OkHttpClient.Builder()
+        .cookieJar(cookieJar)
+        .authenticator(authenticator)
+        .addInterceptor { chain -> chain.proceed(authenticator.tagRequest(chain.request())) }
         .apply {
             if (BuildConfig.DEBUG) {
                 addInterceptor(

@@ -2,6 +2,7 @@ package bob.colbaskin.stoq.common.network
 
 import bob.colbaskin.stoq.common.core.ApiResult
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -19,18 +20,19 @@ suspend inline fun <reified T, reified R> safeApiCall(
     ApiResult.Success(successHandler(apiCall()))
 } catch (exception: Exception) {
     when (exception) {
+        is CancellationException -> if (exception is TimeoutCancellationException) ApiResult.Error(
+            title = "Время ожидания истекло",
+            text = "Сервер не ответил вовремя. Попробуйте ещё раз."
+        ) else throw exception
         is IOException -> ApiResult.Error(
             title = "Нет подключения",
             text = "Проверьте подключение к интернету и повторите попытку."
         )
-        is TimeoutCancellationException -> ApiResult.Error(
-            title = "Время ожидания истекло",
-            text = "Сервер не ответил вовремя. Попробуйте ещё раз."
-        )
         is HttpException -> ApiResult.Error(
             title = "Не удалось выполнить запрос",
-            text = exception.serverMessage()
-                ?: "Сервер вернул ошибку ${exception.code()}. Проверьте введённые данные и повторите попытку."
+            text = if (exception.code() >= 500) "Сервис временно недоступен. Повторите попытку позже."
+                else exception.serverMessage()
+                    ?: "Сервер вернул ошибку ${exception.code()}. Проверьте введённые данные и повторите попытку."
         )
         else -> ApiResult.Error(
             title = "Что-то пошло не так",
@@ -56,5 +58,7 @@ internal fun HttpException.serverMessage(): String? = runCatching {
         "Недостаточно продуктов на складе:\n${missingProducts.joinToString("\n")}"
     } else {
         (message as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank)
+            ?: (message as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                ?.joinToString("\n")?.takeIf(String::isNotBlank)
     }
 }.getOrNull()

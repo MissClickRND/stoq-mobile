@@ -8,4 +8,6 @@ enum RoleStatus {
   MANAGER = 1;
   ADMINISTRATOR = 2;
   WAITER = 3;
+  STOREKEEPER = 4;
+  PENDING = 5;
 }

@@ -7,17 +7,24 @@ import bob.colbaskin.stoq.feature.auth.domain.model.AuthUser
 import bob.colbaskin.stoq.feature.auth.domain.model.UserRole
 
 fun AuthUserDto.toDomain(): AuthUser = AuthUser(
-    id = id,
+    id = id.toString(),
     fullName = fullName,
     email = email,
-    role = UserRole.entries.firstOrNull { it.name == role } ?: UserRole.Waiter,
-    avatarUrl = avatarUrl
+    role = when (role) {
+        "ADMIN" -> UserRole.Administrator
+        "MANAGER" -> UserRole.Manager
+        "WAITER" -> UserRole.Waiter
+        "STOREKEEPER" -> UserRole.Storekeeper
+        "WAIT_CONFIRM" -> UserRole.Pending
+        else -> error("Unknown user role")
+    },
+    avatarUrl = avatarUrl,
+    restaurantId = restaurantId
 )
 
 fun AccessRequest.toDto(): AccessRequestDto = AccessRequestDto(
     fullName = fullName,
     email = email,
-    companyName = companyName,
-    role = requestedRole.name,
-    reason = reason
+    password = password,
+    restaurantId = restaurantId
 )

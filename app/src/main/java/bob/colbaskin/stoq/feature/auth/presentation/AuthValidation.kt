@@ -17,7 +17,7 @@ object AuthValidation {
         email = emailError(email),
         password = when {
             password.isBlank() -> "Введите пароль"
-            password.length < 8 -> "Пароль должен содержать не менее 8 символов"
+            password.length < 4 -> "Пароль должен содержать не менее 4 символов"
             else -> null
         }
     )
@@ -32,8 +32,8 @@ object AuthValidation {
         companyName = if (companyName.trim().isBlank()) "Укажите компанию или ресторан" else null
     )
 
-    private fun emailError(email: String): String? = when {
-        email.trim().isBlank() -> "Введите рабочую почту"
+    fun emailError(email: String): String? = when {
+        email.trim().isBlank() -> "Введите почту"
         !emailPattern.matches(email.trim()) -> "Введите корректный email"
         else -> null
     }
