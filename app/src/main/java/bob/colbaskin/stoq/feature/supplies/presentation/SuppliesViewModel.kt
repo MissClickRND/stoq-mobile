@@ -14,6 +14,7 @@ import bob.colbaskin.stoq.feature.products.data.model.ProductDto
 import bob.colbaskin.stoq.feature.supplies.data.RemoteSupplyRepository
 import bob.colbaskin.stoq.feature.supplies.data.Supply
 import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyDto
+import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyItemDto
 import bob.colbaskin.stoq.feature.supplies.data.ai.AiSupplyRecognition
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -61,23 +62,66 @@ class SuppliesViewModel @Inject constructor(
 
 @HiltViewModel
 class SupplyDetailsViewModel @Inject constructor(
-    private val repository: RemoteSupplyRepository
+    private val repository: RemoteSupplyRepository,
+    private val productRepository: RemoteProductRepository
 ) : ViewModel() {
+    var shouldStartEditing by mutableStateOf(false)
+        private set
     var state by mutableStateOf<UiState<Supply>>(UiState.Loading)
         private set
     var isRefreshing by mutableStateOf(false)
         private set
+    var products by mutableStateOf<List<ProductDto>>(emptyList())
+        private set
+
+    init {
+        viewModelScope.launch {
+            products = (productRepository.getProducts() as? UiState.Success)?.data.orEmpty()
+        }
+    }
 
     fun load(id: String) = viewModelScope.launch {
         val previous = state
         val hasData = previous is UiState.Success
         if (hasData) isRefreshing = true else state = UiState.Loading
-        val result = id.toLongOrNull()?.let { repository.getSupply(it) }
+        val initialResult = id.toLongOrNull()?.let { repository.getSupply(it) }
             ?: UiState.Error("Некорректный идентификатор", "Поставка не найдена.")
+        val result = if (initialResult is UiState.Success && initialResult.data.status == "IN_TRANSIT") {
+            shouldStartEditing = true
+            repository.updateSupply(initialResult.data.id, initialResult.data.toUpdateRequest(status = "RECEIVED"))
+        } else {
+            initialResult
+        }
         state = if (hasData && result is UiState.Error) previous else result
         isRefreshing = false
     }
+
+    fun consumeStartEditing() {
+        shouldStartEditing = false
+    }
+
+    fun update(request: CreateSupplyDto) = viewModelScope.launch {
+        val currentSupply = (state as? UiState.Success)?.data ?: return@launch
+        isRefreshing = true
+        state = repository.updateSupply(currentSupply.id, request)
+        isRefreshing = false
+    }
 }
+
+private fun Supply.toUpdateRequest(status: String = this.status) = CreateSupplyDto(
+    status = status,
+    supplyNumber = number,
+    supplier = supplier.orEmpty(),
+    items = items.map { item ->
+        CreateSupplyItemDto(
+            productId = item.productId,
+            quantity = item.quantity,
+            totalPrice = item.totalPrice ?: ((item.price ?: 0.0) * item.quantity),
+            expiresAt = item.expiresAt.orEmpty()
+        )
+    },
+    receivedAt = receivedAt
+)
 
 @HiltViewModel
 class CreateSupplyViewModel @Inject constructor(

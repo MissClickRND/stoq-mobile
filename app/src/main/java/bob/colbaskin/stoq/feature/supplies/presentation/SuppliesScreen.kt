@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.PersonOutline
@@ -38,6 +39,10 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
@@ -59,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,7 +88,7 @@ import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyDto
 import bob.colbaskin.stoq.feature.supplies.data.model.CreateSupplyItemDto
 import kotlinx.serialization.Serializable
 
-private enum class SupplyStatus { Waiting, OnWay, Accepted, Mismatch }
+private enum class SupplyStatus { Received, InTransit, Cancelled }
 
 @Composable
 fun SuppliesScreen(
@@ -125,9 +131,9 @@ fun SuppliesScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 StorageFilter("Все", supplies.size.toString(), Icons.Outlined.Inventory2, filter == null, { filter = null })
-                StorageFilter("Ожидаются", supplies.count { it.status != "RECEIVED" }.toString(), Icons.Outlined.WarningAmber, filter == SupplyStatus.Waiting, { filter = SupplyStatus.Waiting })
-                StorageFilter("Приняты", supplies.count { it.status == "RECEIVED" }.toString(), Icons.Outlined.CheckCircle, filter == SupplyStatus.Accepted, { filter = SupplyStatus.Accepted })
-                StorageFilter("Есть расхождения", "мог", Icons.Outlined.WarningAmber, filter == SupplyStatus.Mismatch, { filter = SupplyStatus.Mismatch })
+                StorageFilter("Приняты", supplies.count { it.status == "RECEIVED" }.toString(), Icons.Outlined.CheckCircle, filter == SupplyStatus.Received, { filter = SupplyStatus.Received })
+                StorageFilter("В пути", supplies.count { it.status == "IN_TRANSIT" }.toString(), Icons.Outlined.LocalShipping, filter == SupplyStatus.InTransit, { filter = SupplyStatus.InTransit })
+                StorageFilter("Отменены", supplies.count { it.status == "CANCELLED" }.toString(), Icons.Outlined.Close, filter == SupplyStatus.Cancelled, { filter = SupplyStatus.Cancelled })
             }
         }
             items(visible, key = { it.id }) { supply -> SupplyCard(supply) { onSupplyClick(supply.id.toString()) } }
@@ -170,7 +176,7 @@ private fun SearchField(value: String, onChange: (String) -> Unit, onFocusChange
 private fun StorageMetrics(supplies: List<SupplyData>) {
     StoqMetricGrid(listOf(
         StoqMetric("Всего поставок", supplies.size.toString(), "мог", Icons.Outlined.LocalShipping, CustomTheme.colors.success),
-        StoqMetric("Ожидают приёмки", supplies.count { it.status != "RECEIVED" }.toString(), "мог", Icons.Outlined.WarningAmber, CustomTheme.colors.warning),
+        StoqMetric("В пути", supplies.count { it.status == "IN_TRANSIT" }.toString(), "мог", Icons.Outlined.LocalShipping, CustomTheme.colors.warning),
         StoqMetric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "мог", Icons.Outlined.CheckCircle, CustomTheme.colors.success),
         StoqMetric("Сумма поставок", supplies.sumOf { it.totalPrice ?: 0.0 }.takeIf { it > 0 }?.toRubles() ?: "мог", "мог", Icons.Outlined.Inventory2, CustomTheme.colors.success)
     ))
@@ -178,13 +184,69 @@ private fun StorageMetrics(supplies: List<SupplyData>) {
 
 @Composable
 private fun StorageFilter(text: String, count: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
-    Surface(modifier = Modifier.height(42.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onClick), color = if (selected) CustomTheme.colors.primary.copy(alpha = .28f) else MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, if (selected) CustomTheme.colors.primary else MaterialTheme.colorScheme.outline)) {
+    val tint = when (text) {
+        "Отменены" -> CustomTheme.colors.error
+        "В пути" -> CustomTheme.colors.warning
+        "Приняты" -> CustomTheme.colors.success
+        else -> CustomTheme.colors.primary
+    }
+    Surface(modifier = Modifier.height(42.dp).clip(MaterialTheme.shapes.medium).clickable(onClick = onClick), color = if (selected) tint.copy(alpha = .18f) else MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, if (selected) tint else MaterialTheme.colorScheme.outline)) {
         Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, modifier = Modifier.size(18.dp), tint = if (text == "Есть расхождения") CustomTheme.colors.error else if (text == "Ожидаются") CustomTheme.colors.warning else CustomTheme.colors.success)
+            Icon(icon, null, modifier = Modifier.size(18.dp), tint = tint)
             Spacer(Modifier.width(6.dp)); Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
             Spacer(Modifier.width(7.dp)); Box(Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Text(count, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) }
         }
     }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun SupplyStatusSelector(
+    status: String,
+    onStatusChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = status.toSupplyStatusLabel()
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = label,
+            onValueChange = {},
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+            label = { Text("Статус поставки") },
+            readOnly = true,
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            shape = MaterialTheme.shapes.medium,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = CustomTheme.colors.primaryDark,
+                focusedLabelColor = CustomTheme.colors.primaryDark
+            )
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = CustomTheme.colors.surface
+        ) {
+            listOf("RECEIVED", "IN_TRANSIT", "CANCELLED").forEach { value ->
+                DropdownMenuItem(
+                    text = { Text(value.toSupplyStatusLabel()) },
+                    onClick = { onStatusChange(value); expanded = false }
+                )
+            }
+        }
+    }
+}
+
+private fun String.toSupplyStatusLabel() = when (this) {
+    "RECEIVED" -> "Принята"
+    "IN_TRANSIT" -> "В пути"
+    "CANCELLED" -> "Отменена"
+    else -> "мог"
 }
 
 @Composable
@@ -242,16 +304,21 @@ private fun Info(icon: ImageVector, text: String, modifier: Modifier, alignEnd: 
 
 @Composable
 private fun StatusPill(status: SupplyStatus) {
-    val label = when (status) { SupplyStatus.Waiting -> "Ожидается"; SupplyStatus.OnWay -> "В пути"; SupplyStatus.Accepted -> "Принята"; SupplyStatus.Mismatch -> "Есть расхождения" }
+    val label = when (status) { SupplyStatus.Received -> "Принята"; SupplyStatus.InTransit -> "В пути"; SupplyStatus.Cancelled -> "Отменена" }
     Surface(color = statusColor(status).copy(alpha = .12f), shape = MaterialTheme.shapes.small) { Text(label, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp), style = MaterialTheme.typography.bodySmall, color = statusColor(status), fontWeight = FontWeight.Medium) }
 }
 
 @Composable
-private fun statusColor(status: SupplyStatus) = when (status) { SupplyStatus.Waiting -> CustomTheme.colors.warning; SupplyStatus.OnWay -> CustomTheme.colors.primaryDark; SupplyStatus.Accepted -> CustomTheme.colors.success; SupplyStatus.Mismatch -> CustomTheme.colors.error }
+private fun statusColor(status: SupplyStatus) = when (status) { SupplyStatus.Received -> CustomTheme.colors.success; SupplyStatus.InTransit -> CustomTheme.colors.warning; SupplyStatus.Cancelled -> CustomTheme.colors.error }
 
-private fun statusIcon(status: SupplyStatus) = when (status) { SupplyStatus.Waiting -> Icons.Outlined.WarningAmber; SupplyStatus.OnWay -> Icons.Outlined.LocalShipping; SupplyStatus.Accepted -> Icons.Outlined.CheckCircle; SupplyStatus.Mismatch -> Icons.Outlined.WarningAmber }
+private fun statusIcon(status: SupplyStatus) = when (status) { SupplyStatus.Received -> Icons.Outlined.CheckCircle; SupplyStatus.InTransit -> Icons.Outlined.LocalShipping; SupplyStatus.Cancelled -> Icons.Outlined.Close }
 
-private fun SupplyData.toUiStatus() = if (status == "RECEIVED") SupplyStatus.Accepted else SupplyStatus.Waiting
+private fun SupplyData.toUiStatus() = when (status) {
+    "RECEIVED" -> SupplyStatus.Received
+    "CANCELLED" -> SupplyStatus.Cancelled
+    "IN_TRANSIT" -> SupplyStatus.InTransit
+    else -> SupplyStatus.InTransit
+}
 
 @Serializable
 data class SupplyProduct(
@@ -269,6 +336,7 @@ data class SupplyDraftPayload(
     val name: String,
     val date: String,
     val supplier: String,
+    val status: String = "RECEIVED",
     val products: List<SupplyProduct>
 ) {
     val hasContent: Boolean get() = name.isNotBlank() || supplier.isNotBlank() || products.isNotEmpty()
@@ -287,6 +355,7 @@ fun CreateSupplyScreen(
     var name by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("24.06.2024") }
     var supplier by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf("RECEIVED") }
     var search by remember { mutableStateOf("") }
     var showProductSuggestions by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -309,6 +378,7 @@ fun CreateSupplyScreen(
             name = draft.name
             date = draft.date
             supplier = draft.supplier
+            status = draft.status
             products = draft.products
             hasUnsavedChanges = false
         }
@@ -330,8 +400,14 @@ fun CreateSupplyScreen(
             hasUnsavedChanges = products.isNotEmpty() || supplier.isNotBlank()
         }
     }
-    val currentDraft = SupplyDraftPayload(name, date, supplier, products)
-    LaunchedEffect(name, date, supplier, products, hasUnsavedChanges) {
+    val currentDraft = SupplyDraftPayload(name, date, supplier, status, products)
+    val hasValidProducts = products.isNotEmpty() && products.all { product ->
+        product.quantity.replace(',', '.').toDoubleOrNull()?.let { it > 0 } == true &&
+            product.price.replace(',', '.').toDoubleOrNull()?.let { it >= 0 } == true &&
+            product.expires.toExpiryIsoDateTime() != null
+    }
+    val canCreateSupply = name.isNotBlank() && supplier.isNotBlank() && hasValidProducts
+    LaunchedEffect(name, date, supplier, status, products, hasUnsavedChanges) {
         if (hasUnsavedChanges && currentDraft.hasContent) viewModel.saveDraft(currentDraft, showMessage = false)
     }
     val hasChanges = hasUnsavedChanges && currentDraft.hasContent
@@ -354,6 +430,12 @@ fun CreateSupplyScreen(
                     DateField(date, { showDatePicker = true }, Modifier.weight(1f))
                     CompactTextField(supplier, { supplier = it; hasUnsavedChanges = true }, "Поставщик *", Modifier.weight(1f))
                 }
+                Spacer(Modifier.height(8.dp))
+                SupplyStatusSelector(
+                    status = status,
+                    onStatusChange = { status = it; hasUnsavedChanges = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
         item {
@@ -403,10 +485,20 @@ fun CreateSupplyScreen(
                                 CreateSupplyItemDto(product.productId, quantity, quantity * price, expiresAt)
                             } else null
                         }
-                        if (name.isNotBlank() && supplier.isNotBlank() && items.isNotEmpty() && items.size == products.size) {
-                            viewModel.create(CreateSupplyDto(name.trim(), supplier.trim(), items, date.toIsoDateTime()), currentDraft, onBack)
+                        if (canCreateSupply && items.size == products.size) {
+                            viewModel.create(
+                                CreateSupplyDto(
+                                    status = status,
+                                    supplyNumber = name.trim(),
+                                    supplier = supplier.trim(),
+                                    items = items,
+                                    receivedAt = date.toIsoDateTime()
+                                ),
+                                currentDraft,
+                                onBack
+                            )
                         }
-                    }, Modifier.weight(1.3f), enabled = products.isNotEmpty() && products.all { it.expires.toExpiryIsoDateTime() != null })
+                    }, Modifier.weight(1.3f), enabled = canCreateSupply)
                 }
             }
         }
@@ -443,6 +535,7 @@ private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUp
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
+    val context = LocalContext.current
     StoqCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Top) {
             Box(Modifier.size(72.dp).clip(MaterialTheme.shapes.small).background(CustomTheme.colors.primary.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Inventory2, null, modifier = Modifier.size(32.dp), tint = CustomTheme.colors.success) }
@@ -456,7 +549,21 @@ private fun SupplyProductCard(product: SupplyProduct, onDelete: () -> Unit, onUp
             }
         }
     }
-    if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { selected -> expires = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(selected)); onUpdate(product.copy(quantity = quantity, price = price, batch = batch, expires = expires)) }; showDatePicker = false }) { Text("Выбрать") } }) { DatePicker(datePickerState) }
+    if (showDatePicker) DatePickerDialog(
+        onDismissRequest = { showDatePicker = false },
+        confirmButton = {
+            TextButton(onClick = {
+                datePickerState.selectedDateMillis?.let { selected ->
+                    val selectedDate = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(selected))
+                    android.app.TimePickerDialog(context, { _, hour, minute ->
+                        expires = "$selectedDate ${String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute)}"
+                        onUpdate(product.copy(quantity = quantity, price = price, batch = batch, expires = expires))
+                    }, 12, 0, true).show()
+                }
+                showDatePicker = false
+            }) { Text("Далее") }
+        }
+    ) { DatePicker(datePickerState) }
     if (showDeleteDialog) AlertDialog(
         onDismissRequest = { showDeleteDialog = false },
         title = { Text("Удалить товар из поставки?") },
@@ -504,20 +611,24 @@ private fun Double?.toSupplyNumber(): String = this?.let { if (it % 1.0 == 0.0) 
 
 private fun String.toIsoDateTime(): String {
     val parts = trim().removePrefix("Годен до: ").split('.')
-    return if (parts.size == 3) "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00.000Z" else "2026-01-01T00:00:00.000Z"
+    return if (parts.size == 3) "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00+03:00" else "2026-01-01T00:00:00+03:00"
 }
 
 private fun String.toExpiryIsoDateTime(): String? {
-    val parts = trim().removePrefix("Годен до: ").split('.')
+    val raw = trim().removePrefix("Годен до: ")
+    val datePart = raw.substringBefore(' ')
+    val timePart = raw.substringAfter(' ', "00:00").takeIf { it.matches(Regex("\\d{2}:\\d{2}")) } ?: "00:00"
+    val parts = datePart.split('.')
     return if (parts.size == 3 && parts.all(String::isNotBlank)) {
-        "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T00:00:00.000Z"
+        "${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}T${timePart}:00+03:00"
     } else null
 }
 
 private fun String.toExpiryDisplayValue(): String? {
     val datePart = substringBefore('T').takeIf { it.length == 10 } ?: return null
     val parts = datePart.split('-')
-    return if (parts.size == 3) "${parts[2]}.${parts[1]}.${parts[0]}" else null
+    val timePart = substringAfter('T', "").take(5)
+    return if (parts.size == 3) "${parts[2]}.${parts[1]}.${parts[0]}${if (timePart.isNotBlank()) " $timePart" else ""}" else null
 }
 
 @Composable

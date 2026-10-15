@@ -44,6 +44,7 @@ data class SupplyItemDto(
 
 @Serializable
 data class CreateSupplyDto(
+    val status: String = "RECEIVED",
     val supplyNumber: String,
     val supplier: String,
     val items: List<CreateSupplyItemDto>,

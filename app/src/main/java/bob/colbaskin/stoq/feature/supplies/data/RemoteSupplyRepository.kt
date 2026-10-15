@@ -69,6 +69,17 @@ class RemoteSupplyRepository @Inject constructor(
     suspend fun createSupply(request: CreateSupplyDto): UiState<Unit> = safeApiCall(
         apiCall = { api.createSupply(request) }, successHandler = { Unit }
     ).toUiState()
+
+    suspend fun updateSupply(id: Long, request: CreateSupplyDto): UiState<Supply> = safeApiCall(
+        apiCall = {
+            val products = when (val result = productRepository.getProducts()) {
+                is UiState.Success -> result.data.associateBy { it.id }
+                else -> emptyMap()
+            }
+            api.updateSupply(id, request).toSupply(products)
+        },
+        successHandler = { it }
+    ).toUiState()
 }
 
 private fun SupplyDto.toSupply(
