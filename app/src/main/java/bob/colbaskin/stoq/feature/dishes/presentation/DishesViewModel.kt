@@ -204,7 +204,7 @@ class DishesViewModel @Inject constructor(
                 name = recommendation.name ?: dishesById.getValue(recommendation.dishId).name,
                 price = recommendation.salePrice?.toInt() ?: dishesById.getValue(recommendation.dishId).price,
                 cost = recommendation.costPrice?.toInt() ?: dishesById.getValue(recommendation.dishId).cost,
-                popularity = recommendation.score ?: -1,
+                popularity = recommendation.score?.toInt() ?: -1,
                 availablePortions = recommendation.maxPortions
             ) ?: Dish(
                 id = recommendation.dishId,
@@ -218,7 +218,7 @@ class DishesViewModel @Inject constructor(
                 ingredients = emptyList(),
                 soldToday = -1,
                 weeklyRevenue = -1,
-                popularity = recommendation.score ?: -1,
+                popularity = recommendation.score?.toInt() ?: -1,
                 availablePortions = recommendation.maxPortions,
                 recipeLoaded = false
             )

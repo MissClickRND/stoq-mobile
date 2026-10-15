@@ -29,5 +29,5 @@ data class DishRecommendationDto(
     val profit: Double? = null,
     val maxPortions: Double? = null,
     val expiringProducts: List<JsonElement> = emptyList(),
-    val recommendationScore: Int? = null
+    val recommendationScore: Double? = null
 )

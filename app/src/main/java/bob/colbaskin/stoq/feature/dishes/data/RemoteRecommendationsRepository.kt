@@ -33,7 +33,7 @@ data class RecommendedDish(
     val profit: Double?,
     val maxPortions: Double?,
     val expiringProducts: List<String>,
-    val score: Int?
+    val score: Double?
 )
 
 @Singleton
