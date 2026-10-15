@@ -52,7 +52,8 @@ data class StopListSocketUpdate(
 
 @Singleton
 class RecommendationsSocketClient @Inject constructor(
-    private val json: Json
+    private val json: Json,
+    private val httpClient: okhttp3.OkHttpClient
 ) {
     private val results = MutableSharedFlow<SocketResult>(extraBufferCapacity = 16)
     private val _stopListUpdates = MutableSharedFlow<StopListSocketUpdate>(extraBufferCapacity = 1)
@@ -64,6 +65,9 @@ class RecommendationsSocketClient @Inject constructor(
             IO.Options().apply {
                 transports = arrayOf(WebSocket.NAME)
                 reconnection = true
+                callFactory = httpClient
+                webSocketFactory = httpClient
+                forceNew = true
             }
         ).also { socket ->
             socket.on(Socket.EVENT_CONNECT) { logDebug("Подключено к namespace /recommendations") }

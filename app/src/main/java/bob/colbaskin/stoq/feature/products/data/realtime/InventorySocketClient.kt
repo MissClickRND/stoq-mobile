@@ -18,7 +18,10 @@ import javax.inject.Singleton
 data class InventorySocketChange(val event: String, val reason: String?)
 
 @Singleton
-class InventorySocketClient @Inject constructor(private val json: Json) {
+class InventorySocketClient @Inject constructor(
+    private val json: Json,
+    private val httpClient: okhttp3.OkHttpClient
+) {
     private val changesFlow = MutableSharedFlow<InventorySocketChange>(extraBufferCapacity = 32)
     val changes = changesFlow.asSharedFlow()
     private var users = 0
@@ -27,6 +30,9 @@ class InventorySocketClient @Inject constructor(private val json: Json) {
         IO.socket(BuildConfig.BASE_API_URL.trimEnd('/') + "/inventory", IO.Options().apply {
             transports = arrayOf(WebSocket.NAME)
             reconnection = true
+            callFactory = httpClient
+            webSocketFactory = httpClient
+            forceNew = true
         }).also { connection ->
             connection.on(Socket.EVENT_CONNECT) {
                 log("Подключено к /inventory")
@@ -56,7 +62,10 @@ class InventorySocketClient @Inject constructor(private val json: Json) {
 
     @Synchronized fun release() {
         users = (users - 1).coerceAtLeast(0)
-        if (users == 0) socket.disconnect()
+        if (users == 0) {
+            socket.disconnect()
+            productIds = emptyList()
+        }
     }
 
     fun syncStock(ids: List<Long>) {
