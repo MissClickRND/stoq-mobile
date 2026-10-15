@@ -34,6 +34,11 @@ data class StorageProduct(
 class RemoteInventoryRepository @Inject constructor(
     private val api: InventoryApiService
 ) {
+    suspend fun dispose(batchId: Long): UiState<Unit> = safeApiCall(
+        apiCall = { api.dispose(batchId) },
+        successHandler = { Unit }
+    ).toUiState()
+
     suspend fun writeOff(batchId: Long): UiState<Unit> = safeApiCall(
         apiCall = { api.writeOff(batchId) },
         successHandler = { Unit }

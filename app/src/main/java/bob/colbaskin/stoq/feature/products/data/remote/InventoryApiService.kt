@@ -4,6 +4,7 @@ import bob.colbaskin.stoq.feature.products.data.model.InventoryDto
 import bob.colbaskin.stoq.feature.products.data.model.ExpiringInventoryDto
 import bob.colbaskin.stoq.feature.products.data.model.UpdateQuantityDto
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PUT
 import retrofit2.http.POST
@@ -11,6 +12,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface InventoryApiService {
+    @DELETE("inventory/write-offs/{batchId}")
+    suspend fun dispose(@Path("batchId") batchId: Long)
+
     @POST("inventory/{batchId}/write-off")
     suspend fun writeOff(@Path("batchId") batchId: Long)
     @GET("inventory")

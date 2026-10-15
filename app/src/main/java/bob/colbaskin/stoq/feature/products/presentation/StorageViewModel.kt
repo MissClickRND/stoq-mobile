@@ -21,14 +21,96 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import bob.colbaskin.stoq.feature.dashboard.data.RemoteStatisticsRepository
+import bob.colbaskin.stoq.feature.dashboard.data.model.InventoryStatisticsDto
+import bob.colbaskin.stoq.feature.dashboard.data.model.WriteOffDto
 
 @HiltViewModel
 class StorageViewModel @Inject constructor(
     private val repository: RemoteInventoryRepository,
     private val productRepository: RemoteProductRepository,
     private val draftsRepository: DraftRepository,
-    private val inventorySocket: InventorySocketClient
+    private val inventorySocket: InventorySocketClient,
+    private val statisticsRepository: RemoteStatisticsRepository
 ) : ViewModel() {
+    var statistics by mutableStateOf<UiState<InventoryStatisticsDto>>(UiState.Loading)
+        private set
+    var writeOffs by mutableStateOf<UiState<List<WriteOffDto>>>(UiState.Loading)
+        private set
+    var writeOffsVisible by mutableStateOf(false)
+        private set
+    var isWriteOffsRefreshing by mutableStateOf(false)
+        private set
+    var writeOffsError by mutableStateOf<String?>(null)
+        private set
+    var disposalTarget by mutableStateOf<WriteOffDto?>(null)
+        private set
+    var disposalState by mutableStateOf<UiState<Unit>?>(null)
+        private set
+    private var writeOffsGeneration = 0
+
+    fun selectDisposal(item: WriteOffDto) {
+        if (disposalState == UiState.Loading) return
+        disposalTarget = item
+        disposalState = null
+    }
+
+    fun dismissDisposal() {
+        if (disposalState == UiState.Loading) return
+        disposalTarget = null
+        disposalState = null
+    }
+
+    fun confirmDisposal() {
+        val target = disposalTarget ?: return
+        if (disposalState == UiState.Loading) return
+        disposalState = UiState.Loading
+        writeOffsGeneration++
+        viewModelScope.launch {
+            when (val result = repository.dispose(target.batchId)) {
+                is UiState.Success -> {
+                    val current = writeOffs as? UiState.Success
+                    if (current != null) writeOffs = UiState.Success(current.data.filterNot { it.batchId == target.batchId })
+                    disposalTarget = null
+                    disposalState = null
+                    socketUpdateMessage = "Утилизация подтверждена. Продукт убран из списка, история списания сохранена."
+                    loadWriteOffs()
+                    refresh()
+                }
+                else -> disposalState = result
+            }
+        }
+    }
+
+    fun showWriteOffs() {
+        writeOffsVisible = true
+        loadWriteOffs()
+    }
+
+    fun hideWriteOffs() {
+        if (disposalState == UiState.Loading) return
+        dismissDisposal()
+        writeOffsVisible = false
+    }
+
+    fun loadWriteOffs(): Job = viewModelScope.launch {
+        if (isWriteOffsRefreshing || disposalState == UiState.Loading) return@launch
+        val generation = writeOffsGeneration
+        val previous = writeOffs
+        isWriteOffsRefreshing = true
+        writeOffsError = null
+        if (previous !is UiState.Success) writeOffs = UiState.Loading
+        try {
+            val result = statisticsRepository.writeOffs()
+            if (generation != writeOffsGeneration) return@launch
+            if (result is UiState.Error && previous is UiState.Success) {
+                writeOffsError = result.text
+            } else writeOffs = result
+        } finally {
+            isWriteOffsRefreshing = false
+            if (generation != writeOffsGeneration && disposalState != UiState.Loading && writeOffsVisible) loadWriteOffs()
+        }
+    }
     var state by mutableStateOf<UiState<List<StorageProduct>>>(UiState.Loading)
         private set
     var units by mutableStateOf<List<ProductUnitDto>>(emptyList())
@@ -64,6 +146,8 @@ class StorageViewModel @Inject constructor(
     }
 
     fun refresh() = viewModelScope.launch {
+        launch { statistics = statisticsRepository.inventory() }
+        if (writeOffsVisible) loadWriteOffs()
         val hasData = state is UiState.Success
         if (hasData) isRefreshing = true else state = UiState.Loading
         when (val result = repository.getInventory()) {
