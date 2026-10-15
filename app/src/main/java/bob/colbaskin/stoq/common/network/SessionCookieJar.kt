@@ -15,22 +15,24 @@ import javax.inject.Singleton
 class SessionCookieJar @Inject constructor(
     private val dataStore: UserDataStore,
     private val cipher: SessionCipher
-) : CookieJar {
+) : SessionCookies {
     private val origin = BuildConfig.BASE_API_URL.toHttpUrl()
     private var loaded = false
     private var cookies = emptyList<Cookie>()
     private var version = 0L
     private var sessionEpoch = 0L
 
-    @Synchronized fun revision(): Long = version
-    @Synchronized fun epoch(): Long = sessionEpoch
+    @Synchronized override fun revision(): Long = version
+    @Synchronized override fun epoch(): Long = sessionEpoch
 
     private fun load() {
         if (loaded) return
         val saved = runBlocking { dataStore.readEncryptedSession() }
         cookies = if (saved.isBlank()) emptyList() else try {
             val array = JSONArray(cipher.decrypt(saved))
-            (0 until array.length()).mapNotNull { Cookie.parse(origin, array.getString(it)) }
+            val refreshUrl = origin.resolve("auth/refresh")!!
+            (0 until array.length()).mapNotNull { Cookie.parse(origin, array.getString(it))?.withApiAuthPath(origin) }
+                .filter { it.expiresAt > System.currentTimeMillis() && (it.matches(origin) || it.matches(refreshUrl)) }
         } catch (_: Exception) {
             runBlocking { dataStore.clearUser() }
             emptyList()
@@ -41,7 +43,7 @@ class SessionCookieJar @Inject constructor(
     @Synchronized override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         if (!sameOrigin(url)) return
         load()
-        val sessionCookies = cookies.filter { it.name == "accessToken" || it.name == "refreshToken" }
+        val sessionCookies = cookies.filter { it.name == "accessToken" || it.name == "refreshToken" }.map { it.withApiAuthPath(origin) }
         if (sessionCookies.isEmpty()) return
         val replaced = sessionCookies.map { it.name }.toSet()
         this.cookies = (this.cookies.filterNot { it.name in replaced } + sessionCookies)
@@ -56,12 +58,12 @@ class SessionCookieJar @Inject constructor(
         return cookies.filter { it.expiresAt > System.currentTimeMillis() && it.matches(url) }
     }
 
-    @Synchronized fun hasSession(): Boolean {
+    @Synchronized override fun hasSession(): Boolean {
         load()
         return cookies.any { it.expiresAt > System.currentTimeMillis() }
     }
 
-    @Synchronized fun clear() {
+    @Synchronized override fun clear() {
         cookies = emptyList()
         version++
         loaded = true
@@ -69,7 +71,7 @@ class SessionCookieJar @Inject constructor(
         runBlocking { dataStore.clearUser() }
     }
 
-    fun sameOrigin(url: HttpUrl) = url.host == origin.host && url.port == origin.port && url.scheme == origin.scheme
+    override fun sameOrigin(url: HttpUrl) = url.host == origin.host && url.port == origin.port && url.scheme == origin.scheme
 
     fun socketCookieHeader(): String = loadForRequest(origin).joinToString("; ") { "${it.name}=${it.value}" }
 
