@@ -2,7 +2,7 @@ package bob.colbaskin.stoq.feature.main.domain
 
 import bob.colbaskin.stoq.feature.auth.domain.model.UserRole
 
-enum class AppSection { Dashboard, Storage, Supplies, Orders, Dishes, Admin }
+enum class AppSection { Dashboard, Storage, Supplies, Orders, Dishes, Logs, Admin }
 
 fun UserRole?.accessibleSections(): Set<AppSection> = when (this) {
     UserRole.Administrator -> AppSection.entries.toSet()

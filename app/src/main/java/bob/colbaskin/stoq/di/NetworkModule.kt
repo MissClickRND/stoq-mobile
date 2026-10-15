@@ -30,6 +30,10 @@ private val SensitiveJsonField = Regex("\\\"(?:password|token|accessToken|refres
 object NetworkModule {
     @Provides
     @Singleton
+    fun provideLogsApi(retrofit: Retrofit): bob.colbaskin.stoq.feature.logs.data.LogsApi = retrofit.create(bob.colbaskin.stoq.feature.logs.data.LogsApi::class.java)
+
+    @Provides
+    @Singleton
     fun provideJson(): Json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
