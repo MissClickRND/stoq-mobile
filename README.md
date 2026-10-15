@@ -61,17 +61,17 @@ BASE_API_URL=example.com/api/
 ## Скриншоты
 
 <p align="center">
-  <img src="screenshots/rustore/01-overview.jpg" width="220" alt="Дашборд и аналитика" />
-  <img src="screenshots/rustore/02-inventory.jpg" width="220" alt="Склад и остатки" />
-  <img src="screenshots/rustore/03-freshness.jpg" width="220" alt="Контроль сроков годности" />
-  <img src="screenshots/rustore/04-supplies.jpg" width="220" alt="Управление поставками" />
+  <img src="screenshots/rustore/01-overview.jpg" width="180" alt="Дашборд и аналитика" />
+  <img src="screenshots/rustore/02-inventory.jpg" width="180" alt="Склад и остатки" />
+  <img src="screenshots/rustore/03-freshness.jpg" width="180" alt="Контроль сроков годности" />
+  <img src="screenshots/rustore/04-supplies.jpg" width="180" alt="Управление поставками" />
 </p>
 
 <p align="center">
-  <img src="screenshots/rustore/05-scan.jpg" width="220" alt="Распознавание УПД" />
-  <img src="screenshots/rustore/06-menu.jpg" width="220" alt="Блюда и меню" />
-  <img src="screenshots/rustore/07-orders.jpg" width="220" alt="Работа с заказами" />
-  <img src="screenshots/rustore/08-team.jpg" width="220" alt="Команда и права доступа" />
+  <img src="screenshots/rustore/05-scan.jpg" width="180" alt="Распознавание УПД" />
+  <img src="screenshots/rustore/06-menu.jpg" width="180" alt="Блюда и меню" />
+  <img src="screenshots/rustore/07-orders.jpg" width="180" alt="Работа с заказами" />
+  <img src="screenshots/rustore/08-team.jpg" width="180" alt="Команда и права доступа" />
 </p>
 
 Обычные скриншоты приложения находятся в папке [screenshots](screenshots): [светлая тема](screenshots/light) и [тёмная тема](screenshots/dark).
