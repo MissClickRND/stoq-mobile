@@ -12,6 +12,7 @@ import bob.colbaskin.stoq.common.drafts.data.DraftType
 import bob.colbaskin.stoq.feature.products.data.RemoteInventoryRepository
 import bob.colbaskin.stoq.feature.products.data.RemoteProductRepository
 import bob.colbaskin.stoq.feature.products.data.StorageProduct
+import bob.colbaskin.stoq.feature.products.data.realtime.InventorySocketClient
 import bob.colbaskin.stoq.feature.products.data.model.CreateProductDto
 import bob.colbaskin.stoq.feature.products.data.model.CreateUnitDto
 import bob.colbaskin.stoq.feature.products.data.model.ProductUnitDto
@@ -25,7 +26,8 @@ import javax.inject.Inject
 class StorageViewModel @Inject constructor(
     private val repository: RemoteInventoryRepository,
     private val productRepository: RemoteProductRepository,
-    private val draftsRepository: DraftRepository
+    private val draftsRepository: DraftRepository,
+    private val inventorySocket: InventorySocketClient
 ) : ViewModel() {
     var state by mutableStateOf<UiState<List<StorageProduct>>>(UiState.Loading)
         private set
@@ -39,8 +41,21 @@ class StorageViewModel @Inject constructor(
     private var searchJob: Job? = null
     var inventoryDrafts by mutableStateOf<List<Draft>>(emptyList())
         private set
+    var socketUpdateMessage by mutableStateOf<String?>(null)
+        private set
+    private var currentQuery = ""
 
     init {
+        viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            inventorySocket.changes.collect { change ->
+                if (change.event != "connected") {
+                    socketUpdateMessage = change.reason?.takeIf(String::isNotBlank)?.let { "Склад обновлён: $it" }
+                        ?: if (change.event == "inventory:batchExpired") "У партии истёк срок годности" else "Остатки на складе обновлены"
+                }
+                refresh()
+            }
+        }
+        inventorySocket.acquire()
         refresh()
         refreshUnits()
         viewModelScope.launch {
@@ -54,7 +69,8 @@ class StorageViewModel @Inject constructor(
         when (val result = repository.getInventory()) {
             is UiState.Success -> {
                 allProducts = result.data
-                state = result
+                inventorySocket.syncStock(result.data.map(StorageProduct::id))
+                state = UiState.Success(result.data.filter { it.name.contains(currentQuery, ignoreCase = true) || it.id.toString().contains(currentQuery) })
             }
             is UiState.Error -> state = if (hasData) UiState.Success(allProducts) else result
             UiState.Loading -> Unit
@@ -63,6 +79,7 @@ class StorageViewModel @Inject constructor(
     }
 
     fun searchProducts(query: String) {
+        currentQuery = query
         if (query.isBlank() && allProducts.isNotEmpty()) state = UiState.Success(allProducts)
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
@@ -101,10 +118,27 @@ class StorageViewModel @Inject constructor(
         }
     }
 
+    fun writeOff(batchId: Long, onSuccess: () -> Unit) = viewModelScope.launch {
+        if (actionState == UiState.Loading) return@launch
+        actionState = UiState.Loading
+        actionState = repository.writeOff(batchId)
+        if (actionState is UiState.Success) {
+            refresh()
+            onSuccess()
+        }
+    }
+
     private fun refreshUnits() = viewModelScope.launch {
         when (val result = productRepository.getUnits()) {
             is UiState.Success -> units = result.data
             else -> Unit
         }
+    }
+
+    fun consumeSocketUpdateMessage() { socketUpdateMessage = null }
+
+    override fun onCleared() {
+        inventorySocket.release()
+        super.onCleared()
     }
 }

@@ -24,13 +24,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.LocalShipping
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -82,7 +81,7 @@ import bob.colbaskin.stoq.feature.products.data.StorageProduct
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Package
 
-private enum class ProductStatus { Active, New, Ending, Expired }
+private enum class ProductStatus { Active, Depleted, Expired, RunningOut, Unknown }
 
 private data class Product(
     val stableId: String,
@@ -96,6 +95,8 @@ private data class Product(
     val suppliers: String,
     val expiry: String,
     val expiryDate: String,
+    val price: Double?,
+    val totalPrice: Double?,
     val status: ProductStatus
 )
 
@@ -103,7 +104,7 @@ private data class Product(
 fun StorageScreen(
     onInventoryClick: () -> Unit,
     onInventoryDraftsClick: () -> Unit,
-    onSupplyClick: (String) -> Unit,
+    onProductClick: (Long) -> Unit,
     draftFeedback: String? = null,
     onDraftFeedbackShown: () -> Unit = {},
     viewModel: StorageViewModel = hiltViewModel()
@@ -115,10 +116,20 @@ fun StorageScreen(
     var productToDelete by remember { mutableStateOf<Product?>(null) }
     val inventoryState = viewModel.state
     val catalogProducts = (inventoryState as? UiState.Success)?.data.orEmpty().map(StorageProduct::toProduct)
-    val categories = listOf("Все" to catalogProducts.size.toString())
+    val categoryStatuses = listOf(
+        "Все" to null,
+        "В норме" to ProductStatus.Active,
+        "Заканчиваются" to ProductStatus.RunningOut,
+        "Закончились" to ProductStatus.Depleted,
+        "Просрочены" to ProductStatus.Expired
+    )
+    val categories = categoryStatuses.map { (label, status) ->
+        label to catalogProducts.count { status == null || it.status == status }.toString()
+    }
     val filteredProducts = remember(query, selectedCategory, catalogProducts) {
         catalogProducts.filter { product ->
-            val matchesCategory = selectedCategory == categories.first().first || selectedCategory.equals(product.category, ignoreCase = true)
+            val selectedStatus = categoryStatuses.firstOrNull { it.first == selectedCategory }?.second
+            val matchesCategory = selectedStatus == null || product.status == selectedStatus
             val matchesQuery = listOf(product.name, product.article, product.category).any { it.contains(query, ignoreCase = true) }
             matchesCategory && matchesQuery
         }
@@ -175,7 +186,7 @@ fun StorageScreen(
             }
         }
         items(filteredProducts, key = Product::stableId) { product ->
-            ProductCard(product, onSupplyClick = onSupplyClick) { productToDelete = product }
+            ProductCard(product, onClick = { onProductClick(product.id) }) { productToDelete = product }
         }
     }
     }
@@ -199,17 +210,23 @@ fun StorageScreen(
     productToDelete?.let { product ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { productToDelete = null },
-            title = { Text("Удалить продукт?") },
-            text = { Text("Продукт «${product.name}» будет удалён.") },
+            title = { Text("Списать остаток партии?") },
+            text = {
+                Column {
+                    Text("Весь доступный остаток продукта «${product.name}» из партии № ${product.stableId} будет списан.")
+                    (viewModel.actionState as? UiState.Error)?.let { Text(it.text, color = CustomTheme.colors.error) }
+                }
+            },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    viewModel.deleteProduct(product.id) { productToDelete = null }
-                }) { Text("Удалить") }
+                    viewModel.writeOff(product.stableId.toLong()) { productToDelete = null }
+                }, enabled = viewModel.actionState != UiState.Loading) { Text("Списать") }
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { productToDelete = null }) { Text("Отмена") } }
         )
     }
     DraftSnackbar(draftFeedback, onDraftFeedbackShown, Modifier.padding(bottom = 20.dp))
+    DraftSnackbar(viewModel.socketUpdateMessage, viewModel::consumeSocketUpdateMessage, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
@@ -390,8 +407,8 @@ private fun CategoryTab(label: String, count: String, selected: Boolean, onClick
 }
 
 @Composable
-private fun ProductCard(product: Product, onSupplyClick: (String) -> Unit, onDelete: () -> Unit) {
-    StoqCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
+private fun ProductCard(product: Product, onClick: () -> Unit, onDelete: () -> Unit) {
+    StoqCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), contentPadding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
                 modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small).background(CustomTheme.colors.primary.copy(alpha = .14f)),
@@ -408,8 +425,10 @@ private fun ProductCard(product: Product, onSupplyClick: (String) -> Unit, onDel
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         StatusPill(product.status)
-                        IconButton(onClick = onDelete, modifier = Modifier.size(38.dp)) {
-                            Icon(Icons.Outlined.DeleteOutline, "Удалить продукт", tint = CustomTheme.colors.error)
+                        Row {
+                            IconButton(onClick = onDelete, modifier = Modifier.size(38.dp)) {
+                                Icon(Icons.Outlined.DeleteOutline, "Списать остаток партии", tint = CustomTheme.colors.error)
+                            }
                         }
                     }
                 }
@@ -418,29 +437,8 @@ private fun ProductCard(product: Product, onSupplyClick: (String) -> Unit, onDel
         Spacer(Modifier.height(14.dp))
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth()) {
-                ProductFact(Icons.Outlined.Inventory2, "Остаток", product.currentStock, product.status, Modifier.weight(1f))
-                ProductFact(Icons.Outlined.CalendarToday, "Годен до", product.expiry, product.status, Modifier.weight(1f))
-            }
-        }
-        product.supplyId?.let { supplyId ->
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clip(MaterialTheme.shapes.small)
-                    .clickable { onSupplyClick(supplyId.toString()) },
-                shape = MaterialTheme.shapes.small,
-                color = CustomTheme.colors.primary.copy(alpha = .12f),
-                border = BorderStroke(1.dp, CustomTheme.colors.primary.copy(alpha = .42f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Outlined.LocalShipping, null, modifier = Modifier.size(19.dp), tint = CustomTheme.colors.primaryDark)
-                    Column(Modifier.padding(start = 9.dp).weight(1f)) {
-                        Text("Поставка №$supplyId", style = MaterialTheme.typography.labelLarge, color = CustomTheme.colors.primaryDark)
-                        Text("Открыть детали поставки", style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary)
-                    }
-                    Icon(Icons.Outlined.ChevronRight, "Открыть поставку", modifier = Modifier.size(20.dp), tint = CustomTheme.colors.primaryDark)
-                }
+                ProductFact(Icons.Outlined.Inventory2, "Остаток", product.currentStock, product.status, Modifier.weight(1f), expiresAt = product.expiryDate)
+                ProductFact(Icons.Outlined.CalendarToday, "Годен до", product.expiry, product.status, Modifier.weight(1f), expiresAt = product.expiryDate, showExpiryWarning = true)
             }
         }
     }
@@ -457,16 +455,26 @@ private fun StorageProduct.toProduct() = Product(
     minimumStock = "мог",
     suppliers = "мог",
     expiry = expiryDate ?: "мог",
-    expiryDate = expiryDate ?: "мог",
+    expiryDate = expiresAt ?: expiryDate ?: "мог",
+    price = price,
+    totalPrice = totalPrice,
     status = status.toProductStatus()
 )
 
 private fun String?.toProductStatus() = when (this?.uppercase()) {
     "ACTIVE" -> ProductStatus.Active
-    "ENDING" -> ProductStatus.Ending
+    "DEPLETED" -> ProductStatus.Depleted
     "EXPIRED" -> ProductStatus.Expired
-    "NEW" -> ProductStatus.New
-    else -> ProductStatus.New
+    "RUNNINGOUT" -> ProductStatus.RunningOut
+    else -> ProductStatus.Unknown
+}
+
+private fun ProductStatus.infoTitle() = when (this) {
+    ProductStatus.Active -> "В норме"
+    ProductStatus.Depleted -> "Закончился"
+    ProductStatus.Expired -> "Истёк срок"
+    ProductStatus.RunningOut -> "Заканчивается"
+    ProductStatus.Unknown -> "мог"
 }
 
 @Composable
@@ -486,9 +494,10 @@ private fun CategoryPill(category: String) {
 private fun StatusPill(status: ProductStatus) {
     val (label, color) = when (status) {
         ProductStatus.Active -> "●  В норме" to CustomTheme.colors.success
-        ProductStatus.New -> "●  Новый" to CustomTheme.colors.primaryDark
-        ProductStatus.Ending -> "●  Заканчивается" to CustomTheme.colors.warning
+        ProductStatus.Depleted -> "●  Закончился" to CustomTheme.colors.error
         ProductStatus.Expired -> "●  Истёк срок" to CustomTheme.colors.error
+        ProductStatus.RunningOut -> "●  Заканчивается" to CustomTheme.colors.warning
+        ProductStatus.Unknown -> "●  мог" to CustomTheme.colors.textSecondary
     }
     Surface(color = color.copy(alpha = .10f), shape = androidx.compose.material3.MaterialTheme.shapes.medium) {
         Text(label, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
@@ -496,10 +505,18 @@ private fun StatusPill(status: ProductStatus) {
 }
 
 @Composable
-private fun ProductFact(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String, status: ProductStatus, modifier: Modifier, date: String? = null) {
-    val valueColor = if (status == ProductStatus.Expired || status == ProductStatus.Ending) {
-        if (status == ProductStatus.Expired) CustomTheme.colors.error else CustomTheme.colors.warning
-    } else CustomTheme.colors.textPrimary
+private fun ProductFact(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String, status: ProductStatus, modifier: Modifier, date: String? = null, expiresAt: String? = null, showExpiryWarning: Boolean = false) {
+    val remaining = expiresAt?.let(::remainingShelfLife)
+    val valueColor = when {
+        remaining != null && remaining <= java.time.Duration.ofDays(1) -> CustomTheme.colors.error
+        remaining != null && remaining <= java.time.Duration.ofDays(7) -> CustomTheme.colors.warning
+        remaining != null -> CustomTheme.colors.success
+        else -> when (status) {
+        ProductStatus.Expired, ProductStatus.Depleted -> CustomTheme.colors.error
+        ProductStatus.RunningOut -> CustomTheme.colors.warning
+        ProductStatus.Active, ProductStatus.Unknown -> CustomTheme.colors.textPrimary
+        }
+    }
     Column(
         modifier = modifier.padding(horizontal = 6.dp),
         horizontalAlignment = Alignment.Start
@@ -509,7 +526,22 @@ private fun ProductFact(icon: androidx.compose.ui.graphics.vector.ImageVector, t
             Spacer(Modifier.width(5.dp))
             Text(title, style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary, maxLines = 1)
         }
-        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor, textAlign = TextAlign.Start)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(value, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium, color = valueColor, textAlign = TextAlign.Start)
+            if (showExpiryWarning && remaining != null && remaining <= java.time.Duration.ofDays(1)) {
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Outlined.WarningAmber, "Срок годности скоро истекает или уже истёк", modifier = Modifier.size(18.dp), tint = CustomTheme.colors.error)
+            }
+        }
         if (date != null) Text(date, style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary, maxLines = 1)
     }
 }
+
+private fun remainingShelfLife(value: String): java.time.Duration? = runCatching {
+    val expiry = if (value.contains('T')) {
+        java.time.OffsetDateTime.parse(value).toInstant()
+    } else {
+        java.time.LocalDate.parse(value).atStartOfDay(java.time.ZoneId.of("Europe/Moscow")).toInstant()
+    }
+    java.time.Duration.between(java.time.Instant.now(), expiry)
+}.getOrNull()

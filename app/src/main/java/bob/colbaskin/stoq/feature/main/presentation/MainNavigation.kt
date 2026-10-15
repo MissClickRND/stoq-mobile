@@ -24,6 +24,7 @@ import bob.colbaskin.stoq.feature.supplies.presentation.SupplyScanScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SuppliesScreen
 import bob.colbaskin.stoq.feature.supplies.presentation.SupplyDetailsScreen
 import bob.colbaskin.stoq.feature.products.presentation.StorageScreen
+import bob.colbaskin.stoq.feature.products.presentation.ProductDetailsScreen
 import bob.colbaskin.stoq.feature.orders.presentation.CreateOrderScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrdersScreen
 import bob.colbaskin.stoq.feature.orders.presentation.OrderDetailsScreen
@@ -78,6 +79,9 @@ private data class DraftsDestination(val type: String, val excludeDraftId: Strin
 
 @Serializable
 private data class SupplyDetailsDestination(val supplyNumber: String)
+
+@Serializable
+private data class ProductDetailsDestination(val productId: Long)
 
 @Serializable
 private data class OrderDetailsDestination(val orderId: String)
@@ -152,7 +156,7 @@ fun MainNavigation(user: AuthUser?) {
                 StorageScreen(
                     onInventoryClick = { navController.navigate(InventoryDestination()) },
                     onInventoryDraftsClick = { navController.navigate(DraftsDestination("inventory")) },
-                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) },
+                    onProductClick = { productId -> navController.navigate(ProductDetailsDestination(productId)) },
                     draftFeedback = draftFeedback,
                     onDraftFeedbackShown = { entry.savedStateHandle["draft_feedback"] = null }
                 )
@@ -212,6 +216,13 @@ fun MainNavigation(user: AuthUser?) {
                 SupplyDetailsScreen(
                     supplyNumber = entry.toRoute<SupplyDetailsDestination>().supplyNumber,
                     onBack = navController::popBackStack
+                )
+            }
+            composable<ProductDetailsDestination> { entry ->
+                ProductDetailsScreen(
+                    productId = entry.toRoute<ProductDetailsDestination>().productId,
+                    onBack = navController::popBackStack,
+                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId)) }
                 )
             }
             composable(OrdersRoute) { entry ->
