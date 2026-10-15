@@ -2,6 +2,7 @@ package bob.colbaskin.stoq.feature.products.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class ProductUnitDto(
@@ -47,6 +48,17 @@ data class InventoryDto(
 data class InventoryBalanceDto(
     val availableQuantity: Double = 0.0,
     val reservedQuantity: Double = 0.0
+)
+
+@Serializable
+data class ExpiringInventoryDto(
+    val batchId: Long,
+    val productId: Long,
+    val product: ProductDto? = null,
+    val expiresAt: String? = null,
+    val daysRemaining: Int? = null,
+    val availableQuantity: JsonElement? = null,
+    val price: JsonElement? = null
 )
 
 @Serializable
