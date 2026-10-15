@@ -275,8 +275,11 @@ class DishesViewModel @Inject constructor(
 
 @HiltViewModel
 class DishDetailsViewModel @Inject constructor(
-    private val repository: RemoteDishRepository
+    private val repository: RemoteDishRepository,
+    private val statisticsRepository: RemoteStatisticsRepository
 ) : ViewModel() {
+    var statistics by mutableStateOf<UiState<bob.colbaskin.stoq.feature.dashboard.data.model.DishDetailsStatisticsDto>>(UiState.Loading)
+        private set
     var state by mutableStateOf<UiState<Dish>>(UiState.Loading)
         private set
     var deleteState by mutableStateOf<UiState<Unit>?>(null)
@@ -291,7 +294,9 @@ class DishDetailsViewModel @Inject constructor(
         if (hasData) isRefreshing = true
         else state = if (numericId == null) UiState.Error("Некорректный идентификатор", "Блюдо не удалось загрузить.") else UiState.Loading
         if (numericId != null) {
+            val statisticsRequest = async { statisticsRepository.dish(numericId) }
             val result = repository.getDish(numericId)
+            statistics = statisticsRequest.await()
             state = if (hasData && result is UiState.Error) previous else result
         }
         isRefreshing = false

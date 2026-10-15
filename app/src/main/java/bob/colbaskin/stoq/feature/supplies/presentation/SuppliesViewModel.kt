@@ -24,12 +24,18 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.util.UUID
 import javax.inject.Inject
+import bob.colbaskin.stoq.feature.dashboard.data.RemoteStatisticsRepository
+import bob.colbaskin.stoq.feature.dashboard.data.model.SupplyStatisticsDto
+import bob.colbaskin.stoq.feature.dashboard.data.model.SupplyDetailsStatisticsDto
 
 @HiltViewModel
 class SuppliesViewModel @Inject constructor(
     private val repository: RemoteSupplyRepository,
-    private val draftsRepository: DraftRepository
+    private val draftsRepository: DraftRepository,
+    private val statisticsRepository: RemoteStatisticsRepository
 ) : ViewModel() {
+    var statistics by mutableStateOf<UiState<SupplyStatisticsDto>>(UiState.Loading)
+        private set
     var state by mutableStateOf<UiState<List<Supply>>>(UiState.Loading)
         private set
     private var cachedSupplies = emptyList<Supply>()
@@ -46,6 +52,7 @@ class SuppliesViewModel @Inject constructor(
     }
 
     fun refresh() = viewModelScope.launch {
+        launch { statistics = statisticsRepository.supplies() }
         val hasData = state is UiState.Success
         if (hasData) isRefreshing = true else state = UiState.Loading
         when (val result = repository.getSupplies()) {
@@ -63,8 +70,11 @@ class SuppliesViewModel @Inject constructor(
 @HiltViewModel
 class SupplyDetailsViewModel @Inject constructor(
     private val repository: RemoteSupplyRepository,
-    private val productRepository: RemoteProductRepository
+    private val productRepository: RemoteProductRepository,
+    private val statisticsRepository: RemoteStatisticsRepository
 ) : ViewModel() {
+    var statistics by mutableStateOf<UiState<SupplyDetailsStatisticsDto>>(UiState.Loading)
+        private set
     var shouldStartEditing by mutableStateOf(false)
         private set
     var state by mutableStateOf<UiState<Supply>>(UiState.Loading)
@@ -81,6 +91,7 @@ class SupplyDetailsViewModel @Inject constructor(
     }
 
     fun load(id: String) = viewModelScope.launch {
+        id.toLongOrNull()?.let { numericId -> launch { statistics = statisticsRepository.supply(numericId) } }
         val previous = state
         val hasData = previous is UiState.Success
         if (hasData) isRefreshing = true else state = UiState.Loading
@@ -104,6 +115,7 @@ class SupplyDetailsViewModel @Inject constructor(
         val currentSupply = (state as? UiState.Success)?.data ?: return@launch
         isRefreshing = true
         state = repository.updateSupply(currentSupply.id, request)
+        if (state is UiState.Success) statistics = statisticsRepository.supply(currentSupply.id)
         isRefreshing = false
     }
 }
@@ -143,17 +155,31 @@ class CreateSupplyViewModel @Inject constructor(
         private set
     private var draftId: String? = null
     private var productSearchJob: Job? = null
+    var isRefreshingProducts by mutableStateOf(false)
+        private set
+    var productsRefreshError by mutableStateOf<String?>(null)
+        private set
 
     init {
-        viewModelScope.launch {
+        refreshProducts()
+    }
+
+    fun refreshProducts(query: String = "") = viewModelScope.launch {
+        if (isRefreshingProducts) return@launch
+        productSearchJob?.cancel()
+        isRefreshingProducts = true
+        productsRefreshError = null
+        try {
             when (val result = productRepository.getProducts()) {
                 is UiState.Success -> {
                     allProducts = result.data
-                    products = result.data
+                    val normalizedQuery = query.trim()
+                    products = result.data.filter { it.name.contains(normalizedQuery, ignoreCase = true) || it.id.toString().contains(normalizedQuery) }
                 }
-                else -> Unit
+                is UiState.Error -> productsRefreshError = result.text
+                UiState.Loading -> Unit
             }
-        }
+        } finally { isRefreshingProducts = false }
     }
 
     fun searchProducts(query: String) {
