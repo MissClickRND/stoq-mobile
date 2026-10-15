@@ -146,6 +146,7 @@ class OrdersViewModel @Inject constructor(
     }
 
     fun onAction(action: OrdersAction) {
+        if (action is OrdersAction.AddDish && action.item.dishId in _state.value.existingDishIds) return
         when (action) {
             is OrdersAction.Query -> _state.update { it.copy(query = action.value) }
             is OrdersAction.Status -> _state.update { it.copy(status = action.value) }
@@ -204,9 +205,6 @@ class OrdersViewModel @Inject constructor(
     }
 
     private fun addDish(item: OrderItem) = _state.update { state ->
-        if (item.dishId in state.existingDishIds) {
-            return@update state.copy(error = "Это блюдо уже есть в заказе. Сервер пока не поддерживает изменение его количества.")
-        }
         val matching = state.basket.find { it.dishId == item.dishId }
         state.copy(
             basket = if (matching == null) state.basket + item else state.basket.map { if (it.dishId == item.dishId) it.copy(quantity = it.quantity + 1) else it },
