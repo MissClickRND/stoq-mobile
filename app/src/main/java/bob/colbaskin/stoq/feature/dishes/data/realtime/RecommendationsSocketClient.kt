@@ -1,6 +1,7 @@
 package bob.colbaskin.stoq.feature.dishes.data.realtime
 
 import bob.colbaskin.stoq.BuildConfig
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.feature.dishes.data.model.DishRecommendationDto
 import bob.colbaskin.stoq.feature.dishes.data.model.StopListDishDto
@@ -61,7 +62,7 @@ class RecommendationsSocketClient @Inject constructor(
 
     private val socketDelegate = lazy {
         IO.socket(
-            BuildConfig.BASE_API_URL.trimEnd('/') + "/recommendations",
+            BuildConfig.BASE_API_URL.toHttpUrl().newBuilder().encodedPath("/recommendations").query(null).build().toString(),
             IO.Options().apply {
                 transports = arrayOf(WebSocket.NAME)
                 reconnection = true
