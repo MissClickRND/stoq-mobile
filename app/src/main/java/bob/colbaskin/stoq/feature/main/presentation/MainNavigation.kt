@@ -143,7 +143,8 @@ fun MainNavigation(user: AuthUser?) {
                 DashboardScreen(
                     onProductsClick = { navController.navigate(ProductsRoute) { launchSingleTop = true } },
                     onDishesClick = { navController.navigate(DishesRoute) { launchSingleTop = true } },
-                    onOrdersClick = { navController.navigate(OrdersRoute) { launchSingleTop = true } }
+                    onOrdersClick = { navController.navigate(OrdersRoute) { launchSingleTop = true } },
+                    onSupplyClick = { supplyId -> navController.navigate(SupplyDetailsDestination(supplyId.toString())) }
                 )
             }
             composable(ProductsRoute) { entry ->
