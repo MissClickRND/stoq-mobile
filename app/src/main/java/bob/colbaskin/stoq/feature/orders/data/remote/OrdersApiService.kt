@@ -1,0 +1,21 @@
+package bob.colbaskin.stoq.feature.orders.data.remote
+
+import bob.colbaskin.stoq.feature.orders.data.model.AddOrderItemsDto
+import bob.colbaskin.stoq.feature.orders.data.model.CreateOrderDto
+import bob.colbaskin.stoq.feature.orders.data.model.ChangeStatusDto
+import bob.colbaskin.stoq.feature.orders.data.model.OrderDto
+import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+import retrofit2.http.PATCH
+
+interface OrdersApiService {
+    @GET("orders") suspend fun getOrders(): List<OrderDto>
+    @GET("orders/{id}") suspend fun getOrder(@Path("id") id: Long): OrderDto
+    @POST("orders") suspend fun createOrder(@Body request: CreateOrderDto): OrderDto
+    @POST("orders/{id}/items") suspend fun addOrderItems(@Path("id") id: Long, @Body request: AddOrderItemsDto): OrderDto
+    @PATCH("orders/{id}/status") suspend fun changeStatus(@Path("id") id: Long, @Body request: ChangeStatusDto): OrderDto
+    @DELETE("orders/{id}") suspend fun deleteOrder(@Path("id") id: Long)
+}

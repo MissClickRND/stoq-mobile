@@ -12,4 +12,11 @@ message UserPreferencesProto {
   string user_id = 3;
   string user_name = 4;
   string user_email = 5;
+  string encrypted_session = 6;
+  int64 restaurant_id = 7;
+  string restaurant_name = 8;
+  string restaurant_address = 9;
+  string restaurant_email = 10;
+  string restaurant_phone = 11;
+  string user_avatar_url = 12;
 }

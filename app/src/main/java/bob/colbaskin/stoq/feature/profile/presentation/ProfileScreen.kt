@@ -45,6 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
+import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.auth.domain.model.AuthUser
@@ -59,6 +61,7 @@ fun ProfileScreen(
     var signOutConfirmationVisible by remember { mutableStateOf(false) }
     val colors = LocalColors.current
 
+    PullToRefreshContainer(viewModel.state == UiState.Loading, viewModel::refresh, Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(colors.background),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = StoqSpacing.Medium),
@@ -67,6 +70,9 @@ fun ProfileScreen(
         item { ProfileHeader(onBack) }
         item { ProfileHero(user) }
         item { AccountDetails(user) }
+        (viewModel.state as? UiState.Error)?.let { error ->
+            item { Text("${error.text}\nПоказаны сохранённые данные профиля.", color = colors.error, style = MaterialTheme.typography.bodySmall) }
+        }
         item {
             OutlinedButton(
                 onClick = { signOutConfirmationVisible = true },
@@ -77,6 +83,7 @@ fun ProfileScreen(
                 Text("Выйти из аккаунта", modifier = Modifier.padding(start = StoqSpacing.Small))
             }
         }
+    }
     }
 
     if (signOutConfirmationVisible) {
@@ -90,6 +97,7 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = { viewModel.onAction(ProfileAction.SignOut) },
+                    enabled = !viewModel.signingOut,
                     colors = ButtonDefaults.buttonColors(containerColor = colors.error, contentColor = colors.textOnPrimary)
                 ) { Text("Выйти") }
             }
@@ -155,6 +163,10 @@ private fun AccountDetails(user: AuthUser) {
         ProfileDetail(Icons.Outlined.Email, "Рабочая почта", user.email)
         HorizontalDivider(Modifier.padding(vertical = StoqSpacing.Medium), color = LocalColors.current.outline.copy(alpha = 0.55f))
         ProfileDetail(Icons.Outlined.Badge, "Роль в заведении", user.role.title)
+        HorizontalDivider(Modifier.padding(vertical = StoqSpacing.Medium), color = LocalColors.current.outline.copy(alpha = 0.55f))
+        ProfileDetail(Icons.Outlined.Badge, "ID пользователя", user.id)
+        ProfileDetail(Icons.Outlined.Badge, "ID ресторана", user.restaurantId?.toString() ?: "24")
+        user.restaurantName?.let { ProfileDetail(Icons.Outlined.Badge, "Ресторан", it) }
     }
 }
 

@@ -20,21 +20,29 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
-import coil.compose.AsyncImage
+import bob.colbaskin.stoq.feature.dishes.data.RecommendedDish
+import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: (String) -> Unit, viewModel: DishesViewModel = viewModel()) {
+fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: (String) -> Unit, viewModel: DishesViewModel = hiltViewModel()) {
     val colors = LocalColors.current
     val filters = viewModel.collectionFilters(recommended)
+    LaunchedEffect(recommended) { if (recommended) viewModel.loadRecommendations() else viewModel.loadStopList() }
     var showCustomDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
-    val source = if (recommended) viewModel.allDishes.filter { it.active } else viewModel.allDishes
+    val source = if (recommended) viewModel.recommendedDishes else viewModel.stopListDishes
     val dishes = source.filter { dish ->
         val categoryMatches = filters.category == "Все категории" || dish.category == filters.category
         val textMatches = filters.query.isBlank() || dish.name.contains(filters.query, true) || dish.description.contains(filters.query, true)
@@ -60,10 +68,20 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
     } else dishes
     val title = if (recommended) "Рекомендуемые блюда" else "Стоп-лист блюд"
     val subtitle = if (recommended) "Эти блюда рекомендуется продать в первую очередь на основе текущих остатков, сроков годности и маржи." else "Блюда, которые в настоящий момент нельзя заказать из-за отсутствия ингредиентов или истечения срока годности продуктов."
+    PullToRefreshContainer(
+        isRefreshing = if (recommended) viewModel.isRecommendationsRefreshing else viewModel.isStopListRefreshing,
+        onRefresh = { viewModel.refreshCollection(recommended) },
+        modifier = Modifier.fillMaxSize()
+    ) {
     LazyColumn(Modifier.fillMaxSize().background(colors.background), contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад", Modifier.size(30.dp).clickable(onClick = onBack).padding(3.dp), tint = colors.textPrimary); Spacer(Modifier.width(6.dp)); Text(title, style = MaterialTheme.typography.headlineMedium) }; Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary) }
-        item { CollectionSearch(filters.query) { viewModel.updateCollectionFilters(recommended) { current -> current.copy(query = it) } } }
-        item { CollectionKpis(recommended) }
+        item {
+            CollectionSearch(filters.query) { query ->
+                viewModel.updateCollectionFilters(recommended) { current -> current.copy(query = query) }
+                if (!recommended) viewModel.searchStopList(query)
+            }
+        }
+        item { CollectionKpis(recommended, source.size) }
         item {
             CollectionFilters(
                 recommended, filters.firstFilter, filters.category, filters.deliveryFilter, filters.markupFilter, filters.ratingFilter,
@@ -80,7 +98,27 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
             }
         }
         item { Text(if (recommended) "Рекомендуемые блюда" else "Блюда в стоп-листе", style = MaterialTheme.typography.titleLarge) }
-        items(sortedDishes, key = Dish::id) { dish -> CollectionDishCard(dish, recommended) { onDishClick(dish.id) } }
+        items(sortedDishes, key = Dish::id) { dish ->
+            CollectionDishCard(
+                dish,
+                recommended,
+                viewModel.stopListReasonTitle(dish.id),
+                viewModel.stopListReason(dish.id),
+                viewModel.recommendation(dish.id)
+            ) { onDishClick(dish.id) }
+        }
+    }
+    DraftSnackbar(viewModel.socketUpdateMessage, viewModel::socketUpdateMessageShown)
+    }
+    when (val loadState = if (recommended) viewModel.recommendedState else viewModel.stopListState) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(
+            loadState.title,
+            loadState.text,
+            if (recommended) ({ viewModel.loadRecommendations() }) else ({ viewModel.loadStopList() }),
+            onBack
+        )
+        is UiState.Success -> Unit
     }
     if (showCustomDatePicker) {
         DatePickerDialog(
@@ -117,7 +155,7 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
 
 @Composable private fun CollectionSearch(value: String, onChange: (String) -> Unit) { val c = LocalColors.current; OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Поиск блюд, ингредиентов или причин…", maxLines = 1) }, shape = MaterialTheme.shapes.medium, colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = c.surface, unfocusedContainerColor = c.surface, focusedBorderColor = c.primaryDark, unfocusedBorderColor = c.outline)) }
 
-@Composable private fun CollectionKpis(recommended: Boolean) { val c = LocalColors.current; val metrics = if (recommended) listOf(Metric("Всего рекомендуемых блюд", "12", "+33%", Icons.Outlined.Sell, c.success), Metric("Потенциально спасти продуктов", "28 кг", "+42%", Icons.Outlined.Inventory2, c.success), Metric("Средняя наценка", "67%", "+8%", Icons.Outlined.BarChart, c.success), Metric("Срочных блюд сегодня", "5", "+2", Icons.Outlined.AccessTime, c.error)) else listOf(Metric("Всего в стоп-листе", "6", "+25%", Icons.Outlined.WarningAmber, c.error), Metric("Нет ингредиентов", "3", "+50%", Icons.Outlined.Inventory2, c.warning), Metric("Заблокированы из-за сроков", "2", "+100%", Icons.Outlined.AccessTime, c.textSecondary), Metric("Потенциальная выручка", "12 340 ₽", "+40%", Icons.Outlined.BarChart, c.success)); Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { metrics.chunked(2).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { row.forEach { StoqMetricCard(it.label, it.value, it.change, it.icon, it.tint, Modifier.weight(1f)) } } } } }
+@Composable private fun CollectionKpis(recommended: Boolean, total: Int) { val c = LocalColors.current; val metrics = if (recommended) listOf(Metric("Всего рекомендуемых блюд", total.toString(), "", Icons.Outlined.Sell, c.success), Metric("Потенциально спасти продуктов", "185%", "", Icons.Outlined.Inventory2, c.success), Metric("Средняя наценка", "185%", "", Icons.Outlined.BarChart, c.success), Metric("Срочных блюд сегодня", "185%", "", Icons.Outlined.AccessTime, c.error)) else listOf(Metric("Всего в стоп-листе", total.toString(), "", Icons.Outlined.WarningAmber, c.error), Metric("Нет ингредиентов", "185%", "", Icons.Outlined.Inventory2, c.warning), Metric("Заблокированы из-за сроков", "185%", "", Icons.Outlined.AccessTime, c.textSecondary), Metric("Потенциальная выручка", "185%", "", Icons.Outlined.BarChart, c.success)); StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint) }) }
 
 @Composable private fun CollectionFilters(recommended: Boolean, first: String, category: String, delivery: String, markup: String, rating: String, onFirst: (String) -> Unit, onCategory: (String) -> Unit, onDelivery: (String) -> Unit, onMarkup: (String) -> Unit, onRating: (String) -> Unit, onCustomDate: () -> Unit, onReset: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -153,15 +191,15 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
 }
 @Composable private fun FilterButton(text: String, modifier: Modifier, onClick: () -> Unit, primary: Boolean = false) { val c = LocalColors.current; Surface(modifier.height(48.dp).clickable(onClick = onClick), color = if (primary) c.primary else c.surface, shape = MaterialTheme.shapes.medium, border = if (primary) null else BorderStroke(1.dp, c.outline)) { Box(contentAlignment = Alignment.Center) { Text(text, style = MaterialTheme.typography.labelMedium, color = if (primary) c.textOnPrimary else c.textPrimary) } } }
 
-@Composable private fun CollectionDishCard(dish: Dish, recommended: Boolean, onClick: () -> Unit) {
+@Composable private fun CollectionDishCard(dish: Dish, recommended: Boolean, stopListReasonTitle: String, stopListReason: String, recommendation: RecommendedDish?, onClick: () -> Unit) {
     val c = LocalColors.current
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(containerColor = c.surface)) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                AsyncImage(dish.imageUrl, dish.name, Modifier.size(96.dp).clip(MaterialTheme.shapes.small).background(c.surfaceSecondary), contentScale = ContentScale.Crop)
+                StoqAsyncImage(dish.imageUrl, dish.name, Modifier.size(96.dp).clip(MaterialTheme.shapes.small).background(c.surfaceSecondary), contentScale = ContentScale.Crop)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.Top) { Text(dish.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis); if (recommended) Rating(82 + dish.popularity * 2) }
+                    Row(verticalAlignment = Alignment.Top) { Text(dish.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis); if (recommended) Rating(dish.popularity.takeIf { it >= 0 } ?: 0, hasData = dish.popularity >= 0) }
                     Spacer(Modifier.height(3.dp)); Text(dish.description, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(6.dp)); Tag(dish.category)
                 }
@@ -169,18 +207,21 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
             HorizontalDivider(Modifier.padding(vertical = 10.dp), color = c.outline.copy(alpha = .5f))
             if (recommended) {
                 Row(Modifier.fillMaxWidth()) {
-                    Fact("Наценка", "${dish.markup}%", c.success, Modifier.weight(1f))
+                    Fact("Наценка", dish.markup.takeIf { it >= 0 }?.let { "$it%" } ?: "185%", c.success, Modifier.weight(1f))
                     VerticalDivider(Modifier.height(44.dp), color = c.outline.copy(alpha = .5f))
-                    Fact("Ингредиенты", dish.ingredients.size.toString(), c.textPrimary, Modifier.weight(1f).padding(start = 10.dp))
+                    Fact("Ингредиенты", if (dish.recipeLoaded) dish.ingredients.size.toString() else "5", c.textPrimary, Modifier.weight(1f).padding(start = 10.dp))
                     VerticalDivider(Modifier.height(44.dp), color = c.outline.copy(alpha = .5f))
-                    Fact("Причина", if (dish.popularity < 4) "Истекают сроки" else "Высокая маржа", c.textPrimary, Modifier.weight(1.25f).padding(start = 10.dp))
+                    Fact("Причина", recommendation?.expiringProducts?.takeIf { it.isNotEmpty() }?.joinToString() ?: "24", c.textPrimary, Modifier.weight(1.25f).padding(start = 10.dp))
                 }
                 Spacer(Modifier.height(10.dp))
-                Surface(Modifier.fillMaxWidth(), color = c.error.copy(alpha = .10f), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Alarm, null, Modifier.size(19.dp), c.error); Spacer(Modifier.width(8.dp)); Text("Продать сегодня", style = MaterialTheme.typography.labelMedium, color = c.error, fontWeight = FontWeight.Bold) } }
+                Surface(Modifier.fillMaxWidth(), color = c.error.copy(alpha = .10f), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Alarm, null, Modifier.size(19.dp), c.error); Spacer(Modifier.width(8.dp)); Text(recommendation?.expiringProducts?.takeIf { it.isNotEmpty() }?.let { "Заканчиваются: ${it.joinToString()}" } ?: "24", style = MaterialTheme.typography.labelMedium, color = c.error, fontWeight = FontWeight.Bold) } }
             } else {
                 Row(Modifier.fillMaxWidth()) {
-                    Fact(if (dish.id == "pasta") "Истёк срок" else "Нет ингредиентов", "1 ингредиент", c.textPrimary, Modifier.weight(1f), emphasize = true)
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { Text("Ожидаем поставку", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1); Text(deliveryDateFor(dish), style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1) }
+                    Column(Modifier.weight(1f)) {
+                        Text(stopListReasonTitle, style = MaterialTheme.typography.bodySmall, color = c.error, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(stopListReason, modifier = Modifier.padding(top = 3.dp), style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 2)
+                    }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { Text("Ожидаем поставку", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1); Text("24", style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1) }
                 }
             }
         }
@@ -191,5 +232,5 @@ private fun deliveryDateFor(dish: Dish) = when (dish.id) { "pasta" -> deliveryDa
 private fun deliveryDateAfter(days: Int) = java.util.Calendar.getInstance().run { add(java.util.Calendar.DAY_OF_YEAR, days); formatDeliveryDate(timeInMillis) }
 private fun formatDeliveryDate(millis: Long) = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(millis))
 @Composable private fun Tag(text: String) { val c = LocalColors.current; Surface(color = c.warning.copy(alpha = .13f), shape = CircleShape) { Text(text, Modifier.padding(horizontal = 9.dp, vertical = 3.dp), style = MaterialTheme.typography.labelSmall, color = c.warning) } }
-@Composable private fun Rating(value: Int) { val c = LocalColors.current; Surface(color = c.primary.copy(alpha = .16f), shape = MaterialTheme.shapes.medium) { Column(Modifier.padding(horizontal = 9.dp, vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(value.toString(), style = MaterialTheme.typography.titleMedium); Text("рейтинг", style = MaterialTheme.typography.bodySmall, color = c.textSecondary) } } }
+@Composable private fun Rating(value: Int, hasData: Boolean) { val c = LocalColors.current; Surface(color = c.primary.copy(alpha = .16f), shape = MaterialTheme.shapes.medium) { Column(Modifier.padding(horizontal = 9.dp, vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) { Text(if (hasData) value.toString() else "—", style = MaterialTheme.typography.titleMedium); Text("рейтинг", style = MaterialTheme.typography.bodySmall, color = c.textSecondary) } } }
 private data class Metric(val label: String, val value: String, val change: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: androidx.compose.ui.graphics.Color)

@@ -31,6 +31,7 @@ class SignInViewModel @Inject constructor(
     }
 
     private fun signIn() {
+        if (state.signInState == bob.colbaskin.stoq.common.core.UiState.Loading) return
         val fieldError = AuthValidation.signIn(state.email, state.password)
         if (fieldError.hasErrors()) {
             state = state.copy(fieldError = fieldError)

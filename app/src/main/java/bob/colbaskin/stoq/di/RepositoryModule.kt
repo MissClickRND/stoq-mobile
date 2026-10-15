@@ -4,11 +4,11 @@ import bob.colbaskin.stoq.feature.auth.data.AuthRepositoryImpl
 import bob.colbaskin.stoq.feature.auth.domain.AuthRepository
 import bob.colbaskin.stoq.common.userprefs.data.UserPreferencesRepositoryImpl
 import bob.colbaskin.stoq.common.userprefs.domain.UserPreferencesRepository
-import bob.colbaskin.stoq.feature.orders.data.MockOrderRepository
+import bob.colbaskin.stoq.feature.orders.data.RemoteOrderRepository
 import bob.colbaskin.stoq.feature.orders.domain.OrderRepository
-import bob.colbaskin.stoq.feature.admin.data.MockAdminRepository
+import bob.colbaskin.stoq.feature.admin.data.RemoteAdminRepository
 import bob.colbaskin.stoq.feature.admin.domain.AdminRepository
-import bob.colbaskin.stoq.feature.inventory.data.MockInventoryRepository
+import bob.colbaskin.stoq.feature.inventory.data.RemoteInventoryScreenRepository
 import bob.colbaskin.stoq.feature.inventory.domain.InventoryRepository
 import dagger.Binds
 import dagger.Module
@@ -31,13 +31,13 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindOrderRepository(implementation: MockOrderRepository): OrderRepository
+    abstract fun bindOrderRepository(implementation: RemoteOrderRepository): OrderRepository
 
     @Binds
     @Singleton
-    abstract fun bindAdminRepository(implementation: MockAdminRepository): AdminRepository
+    abstract fun bindAdminRepository(implementation: RemoteAdminRepository): AdminRepository
 
     @Binds
     @Singleton
-    abstract fun bindInventoryRepository(implementation: MockInventoryRepository): InventoryRepository
+    abstract fun bindInventoryRepository(implementation: RemoteInventoryScreenRepository): InventoryRepository
 }

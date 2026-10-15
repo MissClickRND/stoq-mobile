@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -58,10 +59,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.admin.domain.model.AdminSnapshot
@@ -75,7 +82,16 @@ import bob.colbaskin.stoq.feature.admin.domain.model.VenueProfile
 @Composable
 fun AdminScreen(viewModel: AdminViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
-    val snapshot = state.snapshot ?: return
+    RefreshOnResume { viewModel.refresh() }
+    val snapshot = state.snapshot
+    if (snapshot == null) {
+        when (val load = state.loadState) {
+            UiState.Loading -> LoadingScreen()
+            is UiState.Error -> ErrorScreen(load.title, load.text, onRetry = { viewModel.refresh() })
+            is UiState.Success -> Unit
+        }
+        return
+    }
     val colors = LocalColors.current
 
     LazyColumn(
@@ -213,13 +229,13 @@ private fun VenueEditor(venue: VenueProfile, onSave: (VenueProfile) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)
         ) {
             StoqTextField(draft.name, { draft = draft.copy(name = it) }, "Название заведения", isRequired = true)
-            StoqTextField(draft.city, { draft = draft.copy(city = it) }, "Город", isRequired = true)
-            StoqTextField(draft.notificationEmail, { draft = draft.copy(notificationEmail = it) }, "Email для уведомлений", isRequired = true)
-            StoqTextField(draft.phone, { draft = draft.copy(phone = it) }, "Телефон", isRequired = true)
+            StoqTextField(draft.city, { draft = draft.copy(city = it) }, "Адрес")
+            StoqTextField(draft.notificationEmail, { draft = draft.copy(notificationEmail = it) }, "Email для уведомлений")
+            StoqTextField(draft.phone, { draft = draft.copy(phone = it) }, "Телефон")
             StoqPrimaryButton(
                 text = "Сохранить изменения",
                 onClick = { onSave(draft) },
-                enabled = draft.name.isNotBlank() && draft.city.isNotBlank() && draft.notificationEmail.isNotBlank() && draft.phone.isNotBlank(),
+                enabled = draft.name.trim().length >= 2,
                 modifier = Modifier.padding(top = StoqSpacing.Small)
             )
         }
@@ -241,7 +257,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.employeeItems(
         )
     }
     item {
-        SectionHeading("Сотрудники", "Меняйте роль в карточке — без горизонтальной прокрутки таблицы.")
+        SectionHeading("Сотрудники", "Показаны заявки, ожидающие подтверждения. Для одобрения выберите роль в карточке.")
     }
     val employees = snapshot.employees.filter {
         it.name.contains(state.employeeQuery, ignoreCase = true) || it.email.contains(state.employeeQuery, ignoreCase = true)
@@ -263,37 +279,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.employeeItems(
 private fun TeamMetrics(snapshot: AdminSnapshot) {
     val employees = snapshot.employees
     val metrics = listOf(
-        TeamMetric("Всего сотрудников", employees.size.toString(), "Все сотрудники заведения", Icons.Outlined.Groups, LocalColors.current.success),
-        TeamMetric("Активных", employees.count { it.status == EmployeeStatus.Active }.toString(), "Работают в системе", Icons.Outlined.PersonOutline, LocalColors.current.success),
+        TeamMetric("Всего сотрудников", "42", "API возвращает только ожидающие заявки", Icons.Outlined.Groups, LocalColors.current.success),
+        TeamMetric("Активных", "18", "Нет данных от сервера", Icons.Outlined.PersonOutline, LocalColors.current.success),
         TeamMetric("Ожидают подтверждения", employees.count { it.status == EmployeeStatus.Pending }.toString(), "Приглашения отправлены", Icons.Outlined.AccessTime, LocalColors.current.warning),
-        TeamMetric("Администраторов", employees.count { it.role == EmployeeRole.Administrator }.toString(), "С правами администратора", Icons.Outlined.AdminPanelSettings, LocalColors.current.secondary)
+        TeamMetric("Администраторов", "3", "Нет данных от сервера", Icons.Outlined.AdminPanelSettings, LocalColors.current.secondary)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric ->
-                    StoqCard(modifier = Modifier.weight(1f), contentPadding = PaddingValues(StoqSpacing.Medium)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                modifier = Modifier.size(40.dp),
-                                color = metric.tint.copy(alpha = 0.14f),
-                                shape = MaterialTheme.shapes.large
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(metric.icon, null, modifier = Modifier.size(22.dp), tint = metric.tint)
-                                }
-                            }
-                            Column(modifier = Modifier.padding(start = StoqSpacing.Small)) {
-                                Text(metric.label, style = MaterialTheme.typography.bodySmall, color = LocalColors.current.textSecondary, maxLines = 2)
-                                Text(metric.value, style = MaterialTheme.typography.titleLarge, color = LocalColors.current.textPrimary)
-                            }
-                        }
-                        Text(metric.subtitle, modifier = Modifier.padding(top = StoqSpacing.Small), style = MaterialTheme.typography.bodySmall, color = LocalColors.current.textSecondary, maxLines = 2)
-                    }
-                }
-            }
-        }
-    }
+    StoqMetricGrid(metrics.map { metric ->
+        StoqMetric(metric.label, metric.value, icon = metric.icon, tint = metric.tint, supportingText = metric.subtitle)
+    })
 }
 
 @Composable
@@ -302,13 +295,14 @@ private fun EmployeeCard(
     onRoleChanged: (EmployeeRole) -> Unit,
     onDelete: () -> Unit
 ) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
     StoqCard {
         Row(verticalAlignment = Alignment.Top) {
             Avatar(employee.initials)
             Column(modifier = Modifier.weight(1f).padding(start = StoqSpacing.Medium)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(employee.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(40.dp)) {
                         Icon(Icons.Outlined.DeleteOutline, "Удалить сотрудника", tint = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -318,7 +312,7 @@ private fun EmployeeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)
                 ) {
-                    RolePicker(employee.role, onRoleChanged, Modifier.weight(1f))
+                    RolePicker(employee.role, onRoleChanged, Modifier.weight(1f), placeholder = if (employee.status == EmployeeStatus.Pending) "Выбрать роль" else null)
                     StoqStatusPill(employee.status.title, employee.status.tone())
                 }
                 Text(
@@ -329,6 +323,15 @@ private fun EmployeeCard(
                 )
             }
         }
+    }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Удалить сотрудника?") },
+            text = { Text("${employee.name} потеряет доступ к заведению. Восстановить запись автоматически не получится.") },
+            confirmButton = { Button(onClick = { showDeleteDialog = false; onDelete() }) { Text("Удалить") } },
+            dismissButton = { OutlinedButton(onClick = { showDeleteDialog = false }) { Text("Отмена") } }
+        )
     }
 }
 
@@ -449,6 +452,8 @@ private fun InvitationCard(
 ) {
     val clipboard = LocalClipboardManager.current
     val colors = LocalColors.current
+    var showDeactivateDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     StoqCard {
         Row(verticalAlignment = Alignment.Top) {
             Surface(
@@ -493,12 +498,12 @@ private fun InvitationCard(
                 Text("Копировать", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
             }
             if (invitation.status == InvitationStatus.Active) {
-                OutlinedButton(onClick = onDeactivate, modifier = Modifier.height(44.dp)) {
+                OutlinedButton(onClick = { showDeactivateDialog = true }, modifier = Modifier.height(44.dp)) {
                     Icon(Icons.Outlined.Block, "Отключить приглашение", modifier = Modifier.size(18.dp))
                 }
             }
             Button(
-                onClick = onDelete,
+                onClick = { showDeleteDialog = true },
                 modifier = Modifier.height(44.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.error.copy(alpha = 0.12f),
@@ -509,11 +514,29 @@ private fun InvitationCard(
             }
         }
     }
+    if (showDeactivateDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeactivateDialog = false },
+            title = { Text("Отключить приглашение?") },
+            text = { Text("Ссылка перестанет работать, и сотрудник не сможет присоединиться по ней.") },
+            confirmButton = { Button(onClick = { showDeactivateDialog = false; onDeactivate() }) { Text("Отключить") } },
+            dismissButton = { OutlinedButton(onClick = { showDeactivateDialog = false }) { Text("Отмена") } }
+        )
+    }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Удалить приглашение?") },
+            text = { Text("Приглашение будет удалено без возможности восстановления.") },
+            confirmButton = { Button(onClick = { showDeleteDialog = false; onDelete() }) { Text("Удалить") } },
+            dismissButton = { OutlinedButton(onClick = { showDeleteDialog = false }) { Text("Отмена") } }
+        )
+    }
 }
 
 @Composable
-private fun RolePicker(value: EmployeeRole, onSelected: (EmployeeRole) -> Unit, modifier: Modifier = Modifier) {
-    SelectPicker(value.title, EmployeeRole.entries.map { it.title }, modifier) { title ->
+private fun RolePicker(value: EmployeeRole, onSelected: (EmployeeRole) -> Unit, modifier: Modifier = Modifier, placeholder: String? = null) {
+    SelectPicker(placeholder ?: value.title, listOf(EmployeeRole.Manager, EmployeeRole.Waiter, EmployeeRole.Storekeeper).map { it.title }, modifier) { title ->
         onSelected(EmployeeRole.entries.first { it.title == title })
     }
 }

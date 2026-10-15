@@ -24,14 +24,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.AccessTime
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,30 +49,44 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import bob.colbaskin.stoq.R
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
+import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
+import bob.colbaskin.stoq.feature.products.data.StorageProduct
+import compose.icons.TablerIcons
+import compose.icons.tablericons.Package
 
-private enum class ProductStatus { Normal, LowStock, Expiring }
+private enum class ProductStatus { Active, Depleted, Expired, RunningOut, Unknown }
 
 private data class Product(
+    val stableId: String,
+    val id: Long,
+    val supplyId: Long?,
     val name: String,
     val article: String,
     val category: String,
@@ -71,40 +95,47 @@ private data class Product(
     val suppliers: String,
     val expiry: String,
     val expiryDate: String,
-    val status: ProductStatus,
-    val imageRes: Int
-)
-
-private val catalogProducts = listOf(
-    Product("Помидоры свежие", "00123", "Овощи", "12 кг", "10 кг", "2", "5 дней", "до 25.04.2024", ProductStatus.Normal, R.drawable.product_tomatoes),
-    Product("Куриное филе", "00456", "Мясо", "5 кг", "10 кг", "3", "3 дня", "до 23.04.2024", ProductStatus.LowStock, R.drawable.product_chicken),
-    Product("Сыр моцарелла", "00789", "Молочные", "8 кг", "5 кг", "2", "12 дней", "до 02.05.2024", ProductStatus.Normal, R.drawable.product_mozzarella),
-    Product("Салат айсберг", "00112", "Овощи", "20 шт", "15 шт", "1", "4 дня", "до 24.04.2024", ProductStatus.Expiring, R.drawable.product_iceberg),
-    Product("Лосось атлантический", "00987", "Рыба", "6 кг", "5 кг", "2", "2 дня", "до 22.04.2024", ProductStatus.Expiring, R.drawable.product_salmon)
-)
-
-private val categories = listOf(
-    "Все" to "128",
-    "Овощи" to "24",
-    "Фрукты" to "16",
-    "Мясо" to "14",
-    "Рыба" to "9",
-    "Молочные" to "18"
+    val price: Double?,
+    val totalPrice: Double?,
+    val status: ProductStatus
 )
 
 @Composable
-fun StorageScreen(onInventoryClick: () -> Unit) {
+fun StorageScreen(
+    onInventoryClick: () -> Unit,
+    onInventoryDraftsClick: () -> Unit,
+    onProductClick: (Long) -> Unit,
+    draftFeedback: String? = null,
+    onDraftFeedbackShown: () -> Unit = {},
+    viewModel: StorageViewModel = hiltViewModel()
+) {
     var query by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(categories.first().first) }
+    var searchFocused by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf("Все") }
     var showAddDialog by remember { mutableStateOf(false) }
-    val filteredProducts = remember(query, selectedCategory) {
+    var productToDelete by remember { mutableStateOf<Product?>(null) }
+    val inventoryState = viewModel.state
+    val catalogProducts = (inventoryState as? UiState.Success)?.data.orEmpty().map(StorageProduct::toProduct)
+    val categoryStatuses = listOf(
+        "Все" to null,
+        "В норме" to ProductStatus.Active,
+        "Заканчиваются" to ProductStatus.RunningOut,
+        "Закончились" to ProductStatus.Depleted,
+        "Просрочены" to ProductStatus.Expired
+    )
+    val categories = categoryStatuses.map { (label, status) ->
+        label to catalogProducts.count { status == null || it.status == status }.toString()
+    }
+    val filteredProducts = remember(query, selectedCategory, catalogProducts) {
         catalogProducts.filter { product ->
-            val matchesCategory = selectedCategory == categories.first().first || selectedCategory.equals(product.category, ignoreCase = true)
+            val selectedStatus = categoryStatuses.firstOrNull { it.first == selectedCategory }?.second
+            val matchesCategory = selectedStatus == null || product.status == selectedStatus
             val matchesQuery = listOf(product.name, product.article, product.category).any { it.contains(query, ignoreCase = true) }
             matchesCategory && matchesQuery
         }
     }
 
+    PullToRefreshContainer(viewModel.isRefreshing, viewModel::refresh, Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().background(CustomTheme.colors.background)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -117,8 +148,32 @@ fun StorageScreen(onInventoryClick: () -> Unit) {
                 Text("Управляйте складской номенклатурой и контролируйте\nостатки продуктов", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textSecondary)
             }
         }
-        item { ProductSearchField(query, { query = it }) }
-        item { ProductMetrics() }
+        item {
+            Column {
+                ProductSearchField(
+                    value = query,
+                    onValueChange = {
+                        query = it
+                        viewModel.searchProducts(it)
+                    },
+                    onFocusChanged = { focused ->
+                        searchFocused = focused
+                        if (focused) viewModel.searchProducts(query)
+                    }
+                )
+                if (searchFocused) {
+                    ProductSearchSuggestions(
+                        products = filteredProducts,
+                        onSelected = { product ->
+                            query = product.name
+                            searchFocused = false
+                        }
+                    )
+                }
+            }
+        }
+        item { DraftsBanner(viewModel.inventoryDrafts.size, "инвентаризация", onInventoryDraftsClick) }
+        item { ProductMetrics(catalogProducts) }
         item { StoqPrimaryButton(text = "Провести инвентаризацию", onClick = onInventoryClick) }
         item {
             Row(
@@ -130,27 +185,144 @@ fun StorageScreen(onInventoryClick: () -> Unit) {
                 }
             }
         }
-        item { ExpiryBanner() }
-        items(filteredProducts, key = { it.article }) { product -> ProductCard(product) }
+        items(filteredProducts, key = Product::stableId) { product ->
+            ProductCard(product, onClick = { onProductClick(product.id) }) { productToDelete = product }
+        }
+    }
     }
     FloatingActionButton(onClick = { showAddDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp), containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary, shape = CircleShape) { Icon(Icons.Outlined.Add, "Добавить продукт") }
+    when (inventoryState) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(inventoryState.title, inventoryState.text, viewModel::refresh)
+        is UiState.Success -> Unit
+    }
+    if (viewModel.actionState == UiState.Loading) LoadingScreen()
     }
     if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            title = { Text("Новый продукт") },
-            text = { Text("Создание продукта будет доступно после подключения каталога к API.") },
-            confirmButton = { TextButton(onClick = { showAddDialog = false }) { Text("Понятно") } }
+        AddProductDialog(
+            units = viewModel.units,
+            actionState = viewModel.actionState,
+            onCreateProduct = viewModel::createProduct,
+            onCreateUnit = viewModel::createUnit,
+            onDismiss = { showAddDialog = false }
         )
+    }
+    productToDelete?.let { product ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { productToDelete = null },
+            title = { Text("Списать остаток партии?") },
+            text = {
+                Column {
+                    Text("Весь доступный остаток продукта «${product.name}» из партии № ${product.stableId} будет списан.")
+                    (viewModel.actionState as? UiState.Error)?.let { Text(it.text, color = CustomTheme.colors.error) }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    viewModel.writeOff(product.stableId.toLong()) { productToDelete = null }
+                }, enabled = viewModel.actionState != UiState.Loading) { Text("Списать") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { productToDelete = null }) { Text("Отмена") } }
+        )
+    }
+    DraftSnackbar(draftFeedback, onDraftFeedbackShown, Modifier.padding(bottom = 20.dp))
+    DraftSnackbar(viewModel.socketUpdateMessage, viewModel::consumeSocketUpdateMessage, Modifier.padding(bottom = 20.dp))
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun AddProductDialog(
+    units: List<bob.colbaskin.stoq.feature.products.data.model.ProductUnitDto>,
+    actionState: UiState<Unit>?,
+    onCreateProduct: (String, Long, () -> Unit) -> Unit,
+    onCreateUnit: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var productName by remember { mutableStateOf("") }
+    var selectedUnitId by remember { mutableStateOf<Long?>(null) }
+    var unitsExpanded by remember { mutableStateOf(false) }
+    var showUnitForm by remember { mutableStateOf(false) }
+    var unitName by remember { mutableStateOf("") }
+    var unitShortName by remember { mutableStateOf("") }
+    val selectedUnit = units.firstOrNull { it.id == selectedUnitId }
+    val colors = CustomTheme.colors
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(.91f),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = colors.surface
+        ) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Добавление продукта", modifier = Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Закрыть") }
+                }
+                StoqTextField(productName, { productName = it }, "Название продукта", isRequired = true)
+                ExposedDropdownMenuBox(
+                    expanded = unitsExpanded,
+                    onExpandedChange = { unitsExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = selectedUnit?.let { "${it.name.orEmpty()} (${it.shortName.orEmpty()})" }.orEmpty(),
+                        onValueChange = {},
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        label = { Text("Единица измерения *") },
+                        placeholder = { Text(if (units.isEmpty()) "Загрузка единиц…" else "Выберите единицу") },
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitsExpanded) }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = unitsExpanded,
+                        onDismissRequest = { unitsExpanded = false },
+                        shape = MaterialTheme.shapes.medium,
+                        containerColor = CustomTheme.colors.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, CustomTheme.colors.outline)
+                    ) {
+                        units.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text("${unit.name.orEmpty()} (${unit.shortName.orEmpty()})", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textPrimary) },
+                                onClick = { selectedUnitId = unit.id; unitsExpanded = false },
+                                modifier = Modifier.background(if (unit.id == selectedUnitId) CustomTheme.colors.primary.copy(alpha = .14f) else CustomTheme.colors.surface)
+                            )
+                        }
+                    }
+                }
+                if (showUnitForm) {
+                    StoqTextField(unitName, { unitName = it }, "Название единицы", isRequired = true)
+                    StoqTextField(unitShortName, { unitShortName = it }, "Сокращение", isRequired = true)
+                    Button(
+                        onClick = { if (unitName.isNotBlank() && unitShortName.isNotBlank()) onCreateUnit(unitName, unitShortName) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Добавить единицу") }
+                } else {
+                    androidx.compose.material3.TextButton(onClick = { showUnitForm = true }) { Text("Добавить единицу измерения") }
+                }
+                if (actionState is UiState.Error) Text(actionState.text, color = colors.error, style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
+                    androidx.compose.material3.OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+                    Button(
+                        onClick = { selectedUnitId?.let { onCreateProduct(productName, it, onDismiss) } },
+                        enabled = productName.isNotBlank() && selectedUnitId != null && actionState != UiState.Loading
+                    ) { Text("Добавить продукт") }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
+private fun ProductSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onFocusChanged: (Boolean) -> Unit
+) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp).onFocusChanged { onFocusChanged(it.isFocused) },
             placeholder = { Text("Поиск продуктов, категорий или артикулов...", maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = CustomTheme.colors.textSecondary) },
             singleLine = true,
@@ -165,31 +337,41 @@ private fun ProductSearchField(value: String, onValueChange: (String) -> Unit) {
 }
 
 @Composable
-private fun ProductMetrics() {
-    val colors = CustomTheme.colors
-    val metrics = listOf(
-        StorageMetric("Всего продуктов", "128", "+12%", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
-        StorageMetric("С низким остатком", "12", "+3", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
-        StorageMetric("Скоро истекут", "8", "+2", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
-        StorageMetric("Поставщиков", "14", "+7%", "активных поставщиков", Icons.Outlined.Group, colors.success)
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                row.forEach { metric ->
-                    StoqMetricCard(
-                        label = metric.label,
-                        value = metric.value,
-                        change = metric.change,
-                        icon = metric.icon,
-                        tint = metric.tint,
-                        modifier = Modifier.weight(1f),
-                        supportingText = metric.supportingText
-                    )
+private fun ProductSearchSuggestions(products: List<Product>, onSelected: (Product) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        products.take(5).forEach { product ->
+            Surface(
+                modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { onSelected(product) },
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .55f))
+            ) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Inventory2, null, tint = CustomTheme.colors.primaryDark)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(product.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(product.currentStock, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun ProductMetrics(products: List<Product>) {
+    val colors = CustomTheme.colors
+    val metrics = listOf(
+        StorageMetric("Всего продуктов", products.size.toString(), "24", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
+        StorageMetric("С низким остатком", "24", "24", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
+        StorageMetric("Скоро истекут", products.count { it.expiry != "24" }.toString(), "24", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
+        StorageMetric("Поставщиков", "24", "24", "активных поставщиков", Icons.Outlined.Group, colors.success)
+    )
+    StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint, it.supportingText) })
 }
 
 private data class StorageMetric(
@@ -225,63 +407,74 @@ private fun CategoryTab(label: String, count: String, selected: Boolean, onClick
 }
 
 @Composable
-private fun ExpiryBanner() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-        color = CustomTheme.colors.warning.copy(alpha = .10f),
-        border = BorderStroke(1.dp, CustomTheme.colors.warning.copy(alpha = .18f))
-    ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(CircleShape).background(CustomTheme.colors.warning.copy(alpha = .13f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.AccessTime, null, tint = CustomTheme.colors.warning, modifier = Modifier.size(27.dp))
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text("8 продуктов скоро истекут", style = MaterialTheme.typography.titleMedium)
-                Text("Проверьте сроки годности и спланируйте использование", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textSecondary)
-            }
-            Text("›", style = MaterialTheme.typography.headlineMedium)
-        }
-    }
-}
-
-@Composable
-private fun ProductCard(product: Product) {
-    StoqCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(16.dp)) {
+private fun ProductCard(product: Product, onClick: () -> Unit, onDelete: () -> Unit) {
+    StoqCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), contentPadding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(product.imageRes),
-                contentDescription = product.name,
-                modifier = Modifier.size(64.dp).clip(androidx.compose.material3.MaterialTheme.shapes.small),
-                contentScale = ContentScale.Crop
-            )
+            Box(
+                modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small).background(CustomTheme.colors.primary.copy(alpha = .14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(TablerIcons.Package, contentDescription = product.name, modifier = Modifier.size(32.dp), tint = CustomTheme.colors.primaryDark)
+            }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         Text(product.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("Арт. ${product.article}", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.textSecondary)
-                        Spacer(Modifier.height(5.dp))
-                        CategoryPill(product.category)
                     }
-                    StatusPill(product.status)
+                    Column(horizontalAlignment = Alignment.End) {
+                        StatusPill(product.status)
+                        Row {
+                            IconButton(onClick = onDelete, modifier = Modifier.size(38.dp)) {
+                                Icon(Icons.Outlined.DeleteOutline, "Списать остаток партии", tint = CustomTheme.colors.error)
+                            }
+                        }
+                    }
                 }
             }
         }
         Spacer(Modifier.height(14.dp))
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth()) {
-                ProductFact(Icons.Outlined.Inventory2, "Текущий остаток", product.currentStock, if (product.status == ProductStatus.LowStock) product.status else ProductStatus.Normal, Modifier.weight(1f))
-                ProductFact(Icons.Outlined.QueryStats, "Мин. остаток", product.minimumStock, ProductStatus.Normal, Modifier.weight(1f))
-            }
-            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = CustomTheme.colors.outline.copy(alpha = .55f))
-            Row(Modifier.fillMaxWidth()) {
-                ProductFact(Icons.Outlined.Group, "Поставщики", product.suppliers, ProductStatus.Normal, Modifier.weight(1f))
-                ProductFact(Icons.Outlined.CalendarToday, "Срок годности", product.expiry, product.status, Modifier.weight(1f), product.expiryDate)
+                ProductFact(Icons.Outlined.Inventory2, "Остаток", product.currentStock, product.status, Modifier.weight(1f), expiresAt = product.expiryDate)
+                ProductFact(Icons.Outlined.CalendarToday, "Годен до", product.expiry, product.status, Modifier.weight(1f), expiresAt = product.expiryDate, showExpiryWarning = true)
             }
         }
     }
+}
+
+private fun StorageProduct.toProduct() = Product(
+    stableId = batchId.toString(),
+    id = id,
+    supplyId = supplyId,
+    name = name,
+    article = id.toString(),
+    category = "24",
+    currentStock = currentStock.ifBlank { "24" },
+    minimumStock = "24",
+    suppliers = "24",
+    expiry = expiryDate ?: "24",
+    expiryDate = expiresAt ?: expiryDate ?: "24",
+    price = price,
+    totalPrice = totalPrice,
+    status = status.toProductStatus()
+)
+
+private fun String?.toProductStatus() = when (this?.uppercase()) {
+    "ACTIVE" -> ProductStatus.Active
+    "DEPLETED" -> ProductStatus.Depleted
+    "EXPIRED" -> ProductStatus.Expired
+    "RUNNINGOUT" -> ProductStatus.RunningOut
+    else -> ProductStatus.Unknown
+}
+
+private fun ProductStatus.infoTitle() = when (this) {
+    ProductStatus.Active -> "В норме"
+    ProductStatus.Depleted -> "Закончился"
+    ProductStatus.Expired -> "Истёк срок"
+    ProductStatus.RunningOut -> "Заканчивается"
+    ProductStatus.Unknown -> "24"
 }
 
 @Composable
@@ -300,9 +493,11 @@ private fun CategoryPill(category: String) {
 @Composable
 private fun StatusPill(status: ProductStatus) {
     val (label, color) = when (status) {
-        ProductStatus.Normal -> "●  В норме" to CustomTheme.colors.success
-        ProductStatus.LowStock -> "●  Низкий остаток" to CustomTheme.colors.error
-        ProductStatus.Expiring -> "●  Скоро истечёт" to CustomTheme.colors.warning
+        ProductStatus.Active -> "●  В норме" to CustomTheme.colors.success
+        ProductStatus.Depleted -> "●  Закончился" to CustomTheme.colors.error
+        ProductStatus.Expired -> "●  Истёк срок" to CustomTheme.colors.error
+        ProductStatus.RunningOut -> "●  Заканчивается" to CustomTheme.colors.warning
+        ProductStatus.Unknown -> "●  24" to CustomTheme.colors.textSecondary
     }
     Surface(color = color.copy(alpha = .10f), shape = androidx.compose.material3.MaterialTheme.shapes.medium) {
         Text(label, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
@@ -310,10 +505,18 @@ private fun StatusPill(status: ProductStatus) {
 }
 
 @Composable
-private fun ProductFact(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String, status: ProductStatus, modifier: Modifier, date: String? = null) {
-    val valueColor = if (status == ProductStatus.LowStock || status == ProductStatus.Expiring) {
-        if (status == ProductStatus.LowStock) CustomTheme.colors.error else CustomTheme.colors.warning
-    } else CustomTheme.colors.textPrimary
+private fun ProductFact(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String, status: ProductStatus, modifier: Modifier, date: String? = null, expiresAt: String? = null, showExpiryWarning: Boolean = false) {
+    val remaining = expiresAt?.let(::remainingShelfLife)
+    val valueColor = when {
+        remaining != null && remaining <= java.time.Duration.ofDays(1) -> CustomTheme.colors.error
+        remaining != null && remaining <= java.time.Duration.ofDays(7) -> CustomTheme.colors.warning
+        remaining != null -> CustomTheme.colors.success
+        else -> when (status) {
+        ProductStatus.Expired, ProductStatus.Depleted -> CustomTheme.colors.error
+        ProductStatus.RunningOut -> CustomTheme.colors.warning
+        ProductStatus.Active, ProductStatus.Unknown -> CustomTheme.colors.textPrimary
+        }
+    }
     Column(
         modifier = modifier.padding(horizontal = 6.dp),
         horizontalAlignment = Alignment.Start
@@ -323,7 +526,22 @@ private fun ProductFact(icon: androidx.compose.ui.graphics.vector.ImageVector, t
             Spacer(Modifier.width(5.dp))
             Text(title, style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary, maxLines = 1)
         }
-        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor, textAlign = TextAlign.Start)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(value, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.titleMedium, color = valueColor, textAlign = TextAlign.Start)
+            if (showExpiryWarning && remaining != null && remaining <= java.time.Duration.ofDays(1)) {
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Outlined.WarningAmber, "Срок годности скоро истекает или уже истёк", modifier = Modifier.size(18.dp), tint = CustomTheme.colors.error)
+            }
+        }
         if (date != null) Text(date, style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary, maxLines = 1)
     }
 }
+
+private fun remainingShelfLife(value: String): java.time.Duration? = runCatching {
+    val expiry = if (value.contains('T')) {
+        java.time.OffsetDateTime.parse(value).toInstant()
+    } else {
+        java.time.LocalDate.parse(value).atStartOfDay(java.time.ZoneId.of("Europe/Moscow")).toInstant()
+    }
+    java.time.Duration.between(java.time.Instant.now(), expiry)
+}.getOrNull()

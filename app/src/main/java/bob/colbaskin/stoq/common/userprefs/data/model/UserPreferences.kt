@@ -26,11 +26,19 @@ fun UserPreferencesProto.toData(): UserPreferences {
             role = when (roleStatus) {
                 RoleStatus.MANAGER -> UserRole.Manager
                 RoleStatus.ADMINISTRATOR -> UserRole.Administrator
+                RoleStatus.STOREKEEPER -> UserRole.Storekeeper
+                RoleStatus.PENDING -> UserRole.Pending
                 RoleStatus.WAITER,
                 RoleStatus.GUEST,
                 RoleStatus.UNRECOGNIZED,
                 null -> UserRole.Waiter
-            }
+            },
+            avatarUrl = userAvatarUrl.takeIf(String::isNotBlank),
+            restaurantId = restaurantId.takeIf { it > 0 },
+            restaurantName = restaurantName.takeIf(String::isNotBlank),
+            restaurantAddress = restaurantAddress.takeIf(String::isNotBlank),
+            restaurantEmail = restaurantEmail.takeIf(String::isNotBlank),
+            restaurantPhone = restaurantPhone.takeIf(String::isNotBlank)
         )
     } else {
         null

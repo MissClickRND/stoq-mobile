@@ -89,6 +89,12 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.compose.icons.tabler)
     implementation(libs.zxing.core)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    implementation(libs.socket.io.client) {
+        exclude(group = "org.json", module = "json")
+    }
+    ksp(libs.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

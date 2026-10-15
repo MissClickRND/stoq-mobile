@@ -11,7 +11,11 @@ data class Order(
     val type: OrderType,
     val location: String,
     val customer: String,
-    val items: List<OrderItem>
+    val items: List<OrderItem>,
+    val table: Int? = null,
+    val guests: Int? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 ) {
     val total: Int get() = items.sumOf { it.price * it.quantity }
     val positions: Int get() = items.sumOf { it.quantity }
@@ -28,7 +32,7 @@ data class OrderItem(
     val unavailableIngredient: String? = null
 )
 
-enum class Availability { Available, Unavailable }
+enum class Availability { Available, Unavailable, Unknown }
 
 data class OrderMetrics(
     val totalToday: Int,

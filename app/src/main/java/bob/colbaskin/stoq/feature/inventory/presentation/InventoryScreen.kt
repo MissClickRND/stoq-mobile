@@ -1,11 +1,13 @@
 package bob.colbaskin.stoq.feature.inventory.presentation
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,7 +29,6 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Refresh
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,55 +49,107 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import bob.colbaskin.stoq.R
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
+import bob.colbaskin.stoq.common.designsystem.components.StoqAsyncImage
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
-import bob.colbaskin.stoq.common.designsystem.components.StoqMetricCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
-import bob.colbaskin.stoq.feature.inventory.domain.model.InventoryProductImage
+import bob.colbaskin.stoq.common.drafts.presentation.DraftsBanner
+import bob.colbaskin.stoq.common.drafts.presentation.UnsavedChangesDialog
+import bob.colbaskin.stoq.common.drafts.presentation.DraftSnackbar
 
 @Composable
 fun InventoryScreen(
     onBack: () -> Unit,
+    onStorageClick: () -> Unit,
+    onDraftsClick: (String?) -> Unit,
+    draftId: String? = null,
     viewModel: InventoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val colors = LocalColors.current
+    var restoredDraftId by remember { mutableStateOf<String?>(null) }
+    var showExitDialog by remember { mutableStateOf(false) }
+    val hasChanges = state.hasDraftableProgress && state.hasUnsavedChanges && state.step != InventoryStep.Report
+    val savedDraftsCount = viewModel.drafts.count { it.id != viewModel.activeDraftId }
 
+    LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(draftId, state.lines) {
+        if (draftId != null && restoredDraftId != draftId && state.lines.isNotEmpty()) {
+            restoredDraftId = draftId
+            viewModel.restoreDraft(draftId)
+        }
+    }
+    BackHandler(enabled = hasChanges) { showExitDialog = true }
+
+    PullToRefreshContainer(
+        isRefreshing = state.isRefreshing,
+        onRefresh = viewModel::refreshForPull,
+        modifier = Modifier.fillMaxSize()
+    ) {
+    Box(Modifier.fillMaxSize().background(colors.background)) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(colors.background),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = StoqSpacing.ScreenHorizontal, vertical = StoqSpacing.Medium),
         verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)
     ) {
-        item { InventoryHeader(state.step, onBack) }
+        item { InventoryHeader(state.step) { if (hasChanges) showExitDialog = true else onBack() } }
         item { InventoryProgress(state.step) }
-        state.notice?.let { notice ->
-            item {
-                Surface(color = colors.primary.copy(alpha = 0.14f), shape = MaterialTheme.shapes.small) {
-                    Text(notice, Modifier.padding(horizontal = StoqSpacing.Large, vertical = StoqSpacing.Medium), style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
-                }
-            }
-        }
+        item { DraftsBanner(savedDraftsCount, "инвентаризация") { onDraftsClick(viewModel.activeDraftId) } }
         when (state.step) {
-            InventoryStep.Checking -> checkingContent(state, viewModel::onAction)
+            InventoryStep.Checking -> checkingContent(
+                state = state,
+                onAction = viewModel::onAction,
+                onSaveAndReturn = { viewModel.saveDraft(onStorageClick, showNotice = false, markClean = true) }
+            )
             InventoryStep.Confirmation -> confirmationContent(state, viewModel::onAction)
             InventoryStep.Report -> reportContent(state, viewModel::onAction)
         }
     }
+    when (val loadState = state.loadingState) {
+        UiState.Loading -> LoadingScreen()
+        is UiState.Error -> ErrorScreen(loadState.title, loadState.text, viewModel::onRetry, onBack = onBack)
+        is UiState.Success -> Unit
+    }
+    if (state.isApplying) LoadingScreen()
+    }
+    }
+    UnsavedChangesDialog(
+        visible = showExitDialog,
+        entityName = "инвентаризацию",
+        onDismiss = { showExitDialog = false },
+        onSaveAndExit = { showExitDialog = false; viewModel.saveDraft(onStorageClick, showNotice = false, markClean = true) },
+        onDiscardAndExit = { showExitDialog = false; viewModel.discardDraft(onBack) }
+    )
+    DraftSnackbar(state.notice, { viewModel.onAction(InventoryAction.NoticeDismissed) }, Modifier.padding(bottom = 20.dp))
 }
 
 @Composable
@@ -152,7 +206,8 @@ private fun InventoryProgress(step: InventoryStep) {
 
 private fun androidx.compose.foundation.lazy.LazyListScope.checkingContent(
     state: InventoryState,
-    onAction: (InventoryAction) -> Unit
+    onAction: (InventoryAction) -> Unit,
+    onSaveAndReturn: () -> Unit
 ) {
     val products = state.lines.filter { line ->
         state.query.isBlank() || listOf(line.product.name, line.product.article, line.product.category).any { it.contains(state.query, ignoreCase = true) }
@@ -178,11 +233,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.checkingContent(
     if (products.isEmpty()) {
         item { InventoryEmptyState() }
     } else {
-        items(products, key = { it.product.id }) { line ->
+        items(products, key = { it.product.batchId }) { line ->
             InventoryProductCard(
                 line = line,
-                onQuantityChanged = { onAction(InventoryAction.QuantityChanged(line.product.id, it)) },
-                onChecked = { onAction(InventoryAction.ProductChecked(line.product.id)) }
+                onQuantityChanged = { onAction(InventoryAction.QuantityChanged(line.product.batchId, it)) },
+                onChecked = { onAction(InventoryAction.ProductChecked(line.product.batchId)) },
+                onWriteOff = { onAction(InventoryAction.QuantityChanged(line.product.batchId, 0.0)) }
             )
         }
     }
@@ -190,7 +246,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.checkingContent(
         InventoryActions(
             checked = state.checkedLines,
             total = state.lines.size,
-            onSave = { onAction(InventoryAction.SaveDraft) },
+            onSave = onSaveAndReturn,
             onProceed = { onAction(InventoryAction.ProceedToConfirmation) }
         )
     }
@@ -219,18 +275,14 @@ private fun InventorySearch(value: String, onValueChange: (String) -> Unit) {
 @Composable
 private fun InventoryProductCard(
     line: InventoryLine,
-    onQuantityChanged: (Int) -> Unit,
-    onChecked: () -> Unit
+    onQuantityChanged: (Double) -> Unit,
+    onChecked: () -> Unit,
+    onWriteOff: () -> Unit
 ) {
     val colors = LocalColors.current
     StoqCard(contentPadding = PaddingValues(StoqSpacing.Large)) {
         Row(verticalAlignment = Alignment.Top) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(imageResource(line.product.image)),
-                contentDescription = line.product.name,
-                modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small),
-                contentScale = ContentScale.Crop
-            )
+            StoqAsyncImage(null, line.product.name, Modifier.size(64.dp).clip(MaterialTheme.shapes.small), contentScale = ContentScale.Crop)
             Column(modifier = Modifier.weight(1f).padding(start = StoqSpacing.Medium)) {
                 Row(verticalAlignment = Alignment.Top) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -244,38 +296,115 @@ private fun InventoryProductCard(
         }
         HorizontalDivider(Modifier.padding(vertical = StoqSpacing.Medium), color = colors.outline.copy(alpha = 0.55f))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            InventoryFact(Icons.Outlined.Inventory2, "По системе", "${line.product.systemQuantity} ${line.product.unit}", Modifier.weight(1f))
+            InventoryFact(Icons.Outlined.Inventory2, "По системе", "${line.product.systemQuantity.formatQuantity()} ${line.product.unit}", Modifier.weight(1f))
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
-                Text("Фактически", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
-                QuantityStepper(
+                Text("Фактически · ${line.product.unit}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                EditableActualQuantity(
                     quantity = line.actualQuantity,
                     onQuantityChanged = onQuantityChanged,
-                    unit = line.product.unit
+                    onConfirmed = onChecked,
+                    onWriteOff = onWriteOff
                 )
             }
-        }
-        OutlinedButton(
-            onClick = onChecked,
-            modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Medium),
-            enabled = !line.isChecked
-        ) {
-            Icon(if (line.isChecked) Icons.Outlined.CheckCircle else Icons.Outlined.Check, null, modifier = Modifier.size(18.dp))
-            Text(if (line.isChecked) "Проверено" else "Подтвердить количество", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
         }
     }
 }
 
 @Composable
-private fun QuantityStepper(quantity: Int, onQuantityChanged: (Int) -> Unit, unit: String) {
+private fun EditableActualQuantity(
+    quantity: Double,
+    onQuantityChanged: (Double) -> Unit,
+    onConfirmed: () -> Unit,
+    onWriteOff: () -> Unit
+) {
     val colors = LocalColors.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onQuantityChanged((quantity - 1).coerceAtLeast(0)) }, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Outlined.Remove, "Уменьшить", tint = colors.primaryDark)
+    var editing by remember { mutableStateOf(false) }
+    var value by remember(quantity) { mutableStateOf(quantity.formatQuantity()) }
+    var showWriteOffDialog by remember { mutableStateOf(false) }
+    val parsedValue = value.replace(',', '.').toDoubleOrNull()
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    BoxWithConstraints {
+        val maximumFieldWidth = (maxWidth - 38.dp).coerceAtLeast(0.dp)
+        val defaultFieldWidth = minOf(126.dp, maximumFieldWidth)
+        val numberWidth = with(density) {
+            textMeasurer.measure(AnnotatedString(value), style = MaterialTheme.typography.bodyLarge).size.width.toDp()
         }
-        Text("$quantity $unit", style = MaterialTheme.typography.titleMedium, color = colors.textPrimary)
-        IconButton(onClick = { onQuantityChanged(quantity + 1) }, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Outlined.Add, "Увеличить", tint = colors.primaryDark)
+        // 16.dp — левое внутреннее поле Material TextField, 56.dp — место под кнопку подтверждения.
+        val editingFieldWidth = (numberWidth + 72.dp).coerceIn(defaultFieldWidth, maximumFieldWidth)
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (editing) {
+                Box(modifier = Modifier.width(editingFieldWidth)) {
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = { value = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        isError = value.isNotBlank() && parsedValue == null,
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    parsedValue?.let {
+                                        if (it.coerceAtLeast(0.0) == 0.0) {
+                                            showWriteOffDialog = true
+                                        } else {
+                                            onQuantityChanged(it)
+                                            onConfirmed()
+                                            editing = false
+                                        }
+                                    }
+                                },
+                                enabled = parsedValue != null
+                            ) { Icon(Icons.Outlined.Check, "Подтвердить количество", tint = colors.success) }
+                        },
+                        shape = MaterialTheme.shapes.small,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.Transparent,
+                            unfocusedTextColor = Color.Transparent,
+                            focusedBorderColor = colors.primaryDark,
+                            unfocusedBorderColor = colors.outline
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                    Text(
+                        value,
+                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp, end = 56.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Surface(
+                    modifier = Modifier.width(defaultFieldWidth).clip(MaterialTheme.shapes.small).clickable { editing = true },
+                    shape = MaterialTheme.shapes.small,
+                    color = colors.surfaceSecondary
+                ) {
+                    Text(
+                        quantity.formatQuantity(),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            IconButton(onClick = { showWriteOffDialog = true }, modifier = Modifier.size(38.dp)) {
+                Icon(Icons.Outlined.DeleteOutline, "Списать продукт", tint = colors.error)
+            }
         }
+    }
+    if (showWriteOffDialog) {
+        AlertDialog(
+            onDismissRequest = { showWriteOffDialog = false },
+            title = { Text("Списать товар?") },
+            text = { Text("Фактический остаток будет установлен в 0. Изменение появится на экране подтверждения инвентаризации.") },
+            confirmButton = { Button(onClick = { showWriteOffDialog = false; onWriteOff() }) { Text("Списать") } },
+            dismissButton = { OutlinedButton(onClick = { showWriteOffDialog = false }) { Text("Отмена") } }
+        )
     }
 }
 
@@ -311,12 +440,20 @@ private fun InventoryActions(checked: Int, total: Int, onSave: () -> Unit, onPro
     val colors = LocalColors.current
     Column {
         Text("Проверено $checked из $total", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+        if (checked < total) {
+            Text(
+                "Остальные позиции будут отмечены без изменений при переходе.",
+                modifier = Modifier.padding(top = StoqSpacing.ExtraSmall),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        }
         Row(modifier = Modifier.fillMaxWidth().padding(top = StoqSpacing.Small), horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-            OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(52.dp)) { Text("Черновик") }
+            OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(52.dp)) { Text("Сохранить") }
             Button(
                 onClick = onProceed,
                 modifier = Modifier.weight(1.35f).height(52.dp),
-                enabled = checked == total,
+                enabled = total > 0,
                 colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.textOnPrimary)
             ) { Text("К подтверждению") }
         }
@@ -337,7 +474,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.confirmationContent(
     if (state.changedLines.isEmpty()) {
         item { InventoryEmptyState("Расхождений нет", "Все фактические остатки совпадают с системными.") }
     } else {
-        items(state.changedLines, key = { it.product.id }) { line -> ChangeCard(line) }
+        items(state.changedLines, key = { it.product.batchId }) { line -> ChangeCard(line) }
     }
     item {
         ConfirmationActions(
@@ -357,16 +494,9 @@ private fun ConfirmationMetrics(state: InventoryState) {
         Triple("К удалению", state.deletedLines.size.toString(), colors.error),
         Triple("Без изменений", (state.lines.size - state.changedLines.size).toString(), colors.secondary)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric ->
-                    StoqMetricCard(metric.first, metric.second, "", if (metric.first == "К удалению") Icons.Outlined.DeleteOutline else Icons.Outlined.Refresh, metric.third, Modifier.weight(1f))
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
+    StoqMetricGrid(metrics.map { metric ->
+        StoqMetric(metric.first, metric.second, icon = if (metric.first == "К удалению") Icons.Outlined.DeleteOutline else Icons.Outlined.Refresh, tint = metric.third)
+    })
 }
 
 @Composable
@@ -385,8 +515,8 @@ private fun ChangeCard(line: InventoryLine) {
                 }
                 Text("Арт. ${line.product.article}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                 Row(modifier = Modifier.padding(top = StoqSpacing.Medium)) {
-                    InventoryFact(Icons.Outlined.Inventory2, "Было", "${line.product.systemQuantity} ${line.product.unit}", Modifier.weight(1f))
-                    InventoryFact(Icons.Outlined.CheckCircle, "Стало", "${line.actualQuantity} ${line.product.unit}", Modifier.weight(1f))
+                    InventoryFact(Icons.Outlined.Inventory2, "Было", "${line.product.systemQuantity.formatQuantity()} ${line.product.unit}", Modifier.weight(1f))
+                    InventoryFact(Icons.Outlined.CheckCircle, "Стало", "${line.actualQuantity.formatQuantity()} ${line.product.unit}", Modifier.weight(1f))
                 }
             }
         }
@@ -423,7 +553,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.reportContent(
     if (state.changedLines.isEmpty()) {
         item { InventoryEmptyState("Изменений нет", "Все товары были проверены без расхождений.") }
     } else {
-        items(state.changedLines, key = { it.product.id }) { line -> ReportLineCard(line) }
+        items(state.changedLines, key = { it.product.batchId }) { line -> ReportLineCard(line) }
     }
     item {
         ReportActions(state, onAction)
@@ -433,32 +563,20 @@ private fun androidx.compose.foundation.lazy.LazyListScope.reportContent(
 @Composable
 private fun ReportActions(state: InventoryState, onAction: (InventoryAction) -> Unit) {
     val context = LocalContext.current
-    val downloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val downloadLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        saveInventoryCsv(context.contentResolver, uri, state)
-        onAction(InventoryAction.ReportSaved("CSV"))
-    }
-    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        saveInventoryPdf(context.contentResolver, uri, state)
-        onAction(InventoryAction.ReportSaved("PDF"))
+        saveInventoryXlsx(context.contentResolver, uri, state)
+        onAction(InventoryAction.ReportSaved("XLSX"))
     }
     Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-            OutlinedButton(
-                onClick = { downloadLauncher.launch("inventory-report.csv") },
-                modifier = Modifier.weight(1f).height(52.dp)
-            ) {
-                Icon(Icons.Outlined.FileDownload, null, modifier = Modifier.size(19.dp))
-                Text("Скачать", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
-            }
-            OutlinedButton(
-                onClick = { pdfLauncher.launch("inventory-report.pdf") },
-                modifier = Modifier.weight(1f).height(52.dp)
-            ) {
-                Icon(Icons.Outlined.PictureAsPdf, null, modifier = Modifier.size(19.dp))
-                Text("В PDF", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
-            }
+        OutlinedButton(
+            onClick = { downloadLauncher.launch("inventory-report.xlsx") },
+            modifier = Modifier.fillMaxWidth().height(52.dp)
+        ) {
+            Icon(Icons.Outlined.FileDownload, null, modifier = Modifier.size(19.dp))
+            Text("Экспорт XLSX", modifier = Modifier.padding(start = StoqSpacing.ExtraSmall))
         }
         Button(
             onClick = { onAction(InventoryAction.StartNew) },
@@ -480,23 +598,9 @@ private fun ReportMetrics(state: InventoryState) {
         ReportMetric("Удалено", state.deletedLines.size.toString(), colors.error, Icons.Outlined.DeleteOutline),
         ReportMetric("Завершено", state.reportTime(), colors.secondary, Icons.Outlined.CalendarToday, state.reportDateTime().substringBefore(","))
     )
-    Column(verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-        metrics.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)) {
-                row.forEach { metric ->
-                    StoqMetricCard(
-                        label = metric.label,
-                        value = metric.value,
-                        change = "",
-                        icon = metric.icon,
-                        tint = metric.tint,
-                        modifier = Modifier.weight(1f),
-                        supportingText = metric.supportingText
-                    )
-                }
-            }
-        }
-    }
+    StoqMetricGrid(metrics.map { metric ->
+        StoqMetric(metric.label, metric.value, icon = metric.icon, tint = metric.tint, supportingText = metric.supportingText)
+    })
 }
 
 private data class ReportMetric(
@@ -531,7 +635,7 @@ private fun ReportLineCard(line: InventoryLine) {
             Icon(if (line.isDeleted) Icons.Outlined.DeleteOutline else Icons.Outlined.Refresh, null, tint = if (line.isDeleted) colors.error else colors.success)
             Column(modifier = Modifier.weight(1f).padding(start = StoqSpacing.Small)) {
                 Text(line.product.name, style = MaterialTheme.typography.titleMedium)
-                Text("${line.product.systemQuantity} ${line.product.unit} → ${line.actualQuantity} ${line.product.unit}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                Text("${line.product.systemQuantity.formatQuantity()} ${line.product.unit} → ${line.actualQuantity.formatQuantity()} ${line.product.unit}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
             }
             StoqStatusPill(if (line.isDeleted) "Удалено" else "Обновлено", if (line.isDeleted) StoqStatusTone.Error else StoqStatusTone.Success)
         }
@@ -555,21 +659,15 @@ private fun InventoryEmptyState(title: String = "Товары не найден�
 private fun InventoryLine.statusTitle() = when {
     !isChecked -> "К проверке"
     isDeleted -> "К удалению"
-    difference != 0 -> "Расхождение"
+    difference != 0.0 -> "Расхождение"
     else -> "Проверено"
 }
 
 private fun InventoryLine.statusTone() = when {
     !isChecked -> StoqStatusTone.Info
     isDeleted -> StoqStatusTone.Error
-    difference != 0 -> StoqStatusTone.Warning
+    difference != 0.0 -> StoqStatusTone.Warning
     else -> StoqStatusTone.Success
 }
 
-private fun imageResource(image: InventoryProductImage) = when (image) {
-    InventoryProductImage.Tomatoes -> R.drawable.product_tomatoes
-    InventoryProductImage.Mozzarella -> R.drawable.product_mozzarella
-    InventoryProductImage.Salmon -> R.drawable.product_salmon
-    InventoryProductImage.Iceberg -> R.drawable.product_iceberg
-    InventoryProductImage.Chicken -> R.drawable.product_chicken
-}
+private fun Double.formatQuantity() = if (this % 1.0 == 0.0) toLong().toString() else toString()

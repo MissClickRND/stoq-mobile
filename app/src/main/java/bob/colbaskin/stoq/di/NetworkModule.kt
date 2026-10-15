@@ -2,6 +2,14 @@ package bob.colbaskin.stoq.di
 
 import bob.colbaskin.stoq.BuildConfig
 import bob.colbaskin.stoq.feature.auth.data.remote.AuthApiService
+import bob.colbaskin.stoq.feature.dishes.data.remote.DishesApiService
+import bob.colbaskin.stoq.feature.dishes.data.remote.RecommendationsApiService
+import bob.colbaskin.stoq.feature.dashboard.data.remote.StatisticsApiService
+import bob.colbaskin.stoq.feature.products.data.remote.InventoryApiService
+import bob.colbaskin.stoq.feature.products.data.remote.ProductsApiService
+import bob.colbaskin.stoq.feature.orders.data.remote.OrdersApiService
+import bob.colbaskin.stoq.feature.supplies.data.remote.SuppliesApiService
+import bob.colbaskin.stoq.feature.supplies.data.ai.AiSupplyApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -13,6 +21,9 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import javax.inject.Singleton
+
+private const val HttpLogTag = "StoqHttp"
+private val SensitiveJsonField = Regex("\\\"(?:password|token|accessToken|refreshToken|email)\\\"\\s*:\\s*\\\"[^\\\"]*\\\"", RegexOption.IGNORE_CASE)
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -26,12 +37,27 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    fun provideOkHttpClient(
+        cookieJar: bob.colbaskin.stoq.common.network.SessionCookieJar,
+        authenticator: bob.colbaskin.stoq.common.network.SessionAuthenticator
+    ): OkHttpClient = OkHttpClient.Builder()
+        .cookieJar(cookieJar)
+        .authenticator(authenticator)
+        .addInterceptor { chain -> chain.proceed(authenticator.tagRequest(chain.request())) }
         .apply {
             if (BuildConfig.DEBUG) {
-                addInterceptor(HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BASIC
-                })
+                addInterceptor(
+                    HttpLoggingInterceptor { message ->
+                        android.util.Log.d(HttpLogTag, message.replace(SensitiveJsonField) { match ->
+                            match.value.substringBefore(':') + ": \"***\""
+                        })
+                    }.apply {
+                        level = HttpLoggingInterceptor.Level.BODY
+                        redactHeader("Authorization")
+                        redactHeader("Cookie")
+                        redactHeader("Set-Cookie")
+                    }
+                )
             }
         }
         .build()
@@ -50,4 +76,36 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideAuthApiService(retrofit: Retrofit): AuthApiService = retrofit.create(AuthApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideDishesApiService(retrofit: Retrofit): DishesApiService = retrofit.create(DishesApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideRecommendationsApiService(retrofit: Retrofit): RecommendationsApiService = retrofit.create(RecommendationsApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideStatisticsApiService(retrofit: Retrofit): StatisticsApiService = retrofit.create(StatisticsApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideInventoryApiService(retrofit: Retrofit): InventoryApiService = retrofit.create(InventoryApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideProductsApiService(retrofit: Retrofit): ProductsApiService = retrofit.create(ProductsApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideSuppliesApiService(retrofit: Retrofit): SuppliesApiService = retrofit.create(SuppliesApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAiSupplyApiService(retrofit: Retrofit): AiSupplyApiService = retrofit.create(AiSupplyApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideOrdersApiService(retrofit: Retrofit): OrdersApiService = retrofit.create(OrdersApiService::class.java)
 }

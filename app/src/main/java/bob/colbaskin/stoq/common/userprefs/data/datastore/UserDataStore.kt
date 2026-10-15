@@ -14,6 +14,7 @@ import bob.colbaskin.stoq.feature.auth.domain.model.AuthUser
 import bob.colbaskin.stoq.feature.auth.domain.model.UserRole
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 private const val UserPreferencesFileName = "user_preferences.pb"
 
@@ -35,20 +36,24 @@ class UserDataStore(context: Context) {
                 userId = user.id
                 userName = user.fullName
                 userEmail = user.email
+                restaurantId = user.restaurantId ?: 0
+                restaurantName = user.restaurantName.orEmpty()
+                restaurantAddress = user.restaurantAddress.orEmpty()
+                restaurantEmail = user.restaurantEmail.orEmpty()
+                restaurantPhone = user.restaurantPhone.orEmpty()
+                userAvatarUrl = user.avatarUrl.orEmpty()
             }
         }
     }
 
     suspend fun clearUser() {
-        dataStore.updateData { preferences ->
-            preferences.copy {
-                authStatus = AuthStatus.NOT_AUTHENTICATED
-                roleStatus = RoleStatus.GUEST
-                userId = ""
-                userName = ""
-                userEmail = ""
-            }
-        }
+        dataStore.updateData { UserPreferencesProto.getDefaultInstance() }
+    }
+
+    suspend fun readEncryptedSession(): String = dataStore.data.first().encryptedSession
+
+    suspend fun saveEncryptedSession(value: String) {
+        dataStore.updateData { preferences -> preferences.copy { encryptedSession = value } }
     }
 
     suspend fun saveAuthStatus(status: AuthConfig) {
@@ -60,4 +65,6 @@ private fun UserRole.toProto(): RoleStatus = when (this) {
     UserRole.Manager -> RoleStatus.MANAGER
     UserRole.Administrator -> RoleStatus.ADMINISTRATOR
     UserRole.Waiter -> RoleStatus.WAITER
+    UserRole.Storekeeper -> RoleStatus.STOREKEEPER
+    UserRole.Pending -> RoleStatus.PENDING
 }

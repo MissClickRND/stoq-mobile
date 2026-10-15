@@ -6,6 +6,15 @@ import org.junit.Test
 
 class AuthValidationTest {
     @Test
+    fun personalEmailsAreAcceptedAcrossAuthForms() {
+        listOf("cloud@gmail.com", " cloud@gmail.com ", "Cloud@Gmail.com", "cloud+test@gmail.com").forEach { email ->
+            assertTrue(AuthValidation.emailError(email) == null)
+            assertFalse(AuthValidation.signIn(email, "1234").hasErrors())
+            assertFalse(AuthValidation.accessRequest("Анна Петрова", email, "4").hasErrors())
+        }
+    }
+
+    @Test
     fun signInAcceptsValidCredentialsFormat() {
         val result = AuthValidation.signIn(
             email = "waiter@stoq.demo",

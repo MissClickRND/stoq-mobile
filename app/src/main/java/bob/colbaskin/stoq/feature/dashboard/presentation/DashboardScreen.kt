@@ -3,6 +3,8 @@ package bob.colbaskin.stoq.feature.dashboard.presentation
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,20 +23,28 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,9 +65,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.R
+import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.StoqCard
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetric
+import bob.colbaskin.stoq.common.designsystem.components.StoqMetricGrid
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
+import bob.colbaskin.stoq.feature.products.data.StorageProduct
 import kotlin.math.roundToInt
 
 private val DashboardGreen = Color(0xFF22A51C)
@@ -68,13 +83,22 @@ private val DashboardYellow = Color(0xFFFFBE35)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(
+    onProductsClick: () -> Unit,
+    onDishesClick: () -> Unit,
+    onOrdersClick: () -> Unit,
+    onSupplyClick: (Long) -> Unit,
+    viewModel: DashboardViewModel = hiltViewModel()
+) {
     var selectedRange by remember { mutableIntStateOf(1) }
     var selectedMetric by remember { mutableIntStateOf(1) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDateRangePickerState()
     val ranges = listOf("Сегодня", "7 дней", "30 дней")
     val metrics = listOf("Выручка", "Прибыль", "Заказы")
+    var expiringDays by remember { mutableStateOf("7") }
+
+    LaunchedEffect(Unit) { viewModel.loadExpiringInventory(expiringDays.toInt()) }
 
     LazyColumn(
         modifier = Modifier
@@ -124,10 +148,19 @@ fun DashboardScreen() {
                 MetricChart()
             }
         }
-        item { MetricGrid() }
-        item { LowStockSection() }
-        item { PromotionSection() }
-        item { CategoriesSection() }
+        item { MetricGrid(onOrdersClick) }
+        item { LowStockSection(onProductsClick) }
+        item {
+            ExpiringBatchesSection(
+                daysThreshold = expiringDays,
+                state = viewModel.expiringInventoryState,
+                onDaysThresholdChange = { expiringDays = it.filter(Char::isDigit) },
+                onLoad = { expiringDays.toIntOrNull()?.let(viewModel::loadExpiringInventory) },
+                onBatchClick = { batchId, productId -> viewModel.openSupplyForBatch(productId, batchId, onSupplyClick) }
+            )
+        }
+        item { PromotionSection(onDishesClick) }
+        item { CategoriesSection(onDishesClick) }
         item { Spacer(Modifier.height(12.dp)) }
     }
     if (showDatePicker) {
@@ -226,42 +259,24 @@ private fun MetricChart() {
 }
 
 @Composable
-private fun MetricGrid() {
+private fun MetricGrid(onOrdersClick: () -> Unit) {
     val items = listOf(
-        DashboardMetric("Выручка", "487 320 ₽", "↑ 18%", Icons.Outlined.AccountBalanceWallet, DashboardGreen),
-        DashboardMetric("Прибыль", "162 450 ₽", "↑ 23%", Icons.Outlined.BarChart, DashboardGreen),
-        DashboardMetric("Заказы", "248", "↑ 12%", Icons.Outlined.ShoppingCart, DashboardRed),
-        DashboardMetric("Средний чек", "1 965 ₽", "↑ 6%", Icons.Outlined.Group, MaterialTheme.colorScheme.onSurfaceVariant)
+        StoqMetric("Выручка", "487 320 ₽", "18%", Icons.Outlined.AccountBalanceWallet, DashboardGreen),
+        StoqMetric("Прибыль", "162 450 ₽", "23%", Icons.Outlined.BarChart, DashboardGreen),
+        StoqMetric("Заказы", "248", "12%", Icons.Outlined.ShoppingCart, DashboardRed, onClick = onOrdersClick),
+        StoqMetric("Средний чек", "1 965 ₽", "6%", Icons.Outlined.Group, MaterialTheme.colorScheme.onSurfaceVariant)
     )
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(horizontal = 20.dp)) {
-        items.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { metric ->
-                    StoqCard(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(42.dp).clip(CircleShape).background(metric.tint.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Icon(metric.icon, null, tint = metric.tint) }
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(metric.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(metric.value, style = MaterialTheme.typography.titleMedium)
-                                Text(metric.growth, color = DashboardGreen, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    StoqMetricGrid(items, Modifier.padding(horizontal = 20.dp))
 }
 
 @Composable
-private fun LowStockSection() {
+private fun LowStockSection(onProductsClick: () -> Unit) {
     val products = listOf(
         StockProduct("Помидоры свежие", "5 кг", "72348", R.drawable.auth_tomatoes),
         StockProduct("Сыр моцарелла", "3 кг", "72349", null),
         StockProduct("Молоко 3,2%", "4 л", "72350", null)
     )
-    SectionCard("Товары с низким остатком", "Все товары") {
+    SectionCard("Товары с низким остатком", "Все товары", onProductsClick) {
         products.forEachIndexed { index, product ->
             if (index != 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .35f))
             Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -275,9 +290,110 @@ private fun LowStockSection() {
 }
 
 @Composable
-private fun PromotionSection() {
+private fun ExpiringBatchesSection(
+    daysThreshold: String,
+    state: UiState<List<StorageProduct>>,
+    onDaysThresholdChange: (String) -> Unit,
+    onLoad: () -> Unit,
+    onBatchClick: (Long, Long) -> Unit
+) {
+    val days = daysThreshold.toIntOrNull()
+    var expanded by remember { mutableStateOf(false) }
+    StoqCard(modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth().animateContentSize(animationSpec = spring())) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Скоро испортятся", style = MaterialTheme.typography.titleLarge)
+                Text("Срок годности истекает в ближайшие ${days ?: "7"} дн.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Surface(color = DashboardRed.copy(alpha = .16f), shape = MaterialTheme.shapes.large) {
+                Text((state as? UiState.Success)?.data?.size?.toString() ?: "…", Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = DashboardRed, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = daysThreshold,
+                onValueChange = onDaysThresholdChange,
+                modifier = Modifier.weight(1f),
+                label = { Text("Порог, дней") },
+                suffix = { Text("дн.") },
+                singleLine = true,
+                isError = daysThreshold.isNotBlank() && days == null,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = DashboardYellow,
+                    focusedLabelColor = DashboardYellow
+                ),
+                trailingIcon = {
+                    IconButton(onClick = onLoad, enabled = days != null && days > 0 && state !is UiState.Loading) {
+                        Icon(Icons.Outlined.Check, "Подтвердить период", tint = DashboardGreen)
+                    }
+                }
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        when (state) {
+            UiState.Loading -> Text("Загружаем партии…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            is UiState.Error -> Text(
+                "${state.title}. Повторить",
+                modifier = Modifier.clip(MaterialTheme.shapes.small).clickable(onClick = onLoad).padding(vertical = 8.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = DashboardRed
+            )
+            is UiState.Success -> {
+                if (state.data.isEmpty()) {
+                    Text("В течение ${days ?: "7"} дн. истекающих партий нет", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    val visibleBatches = if (expanded) state.data else state.data.take(3)
+                    visibleBatches.forEachIndexed { index, batch ->
+                        if (index != 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .35f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
+                                .clickable { onBatchClick(batch.batchId, batch.id) }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(batch.name, color = DashboardGreen, fontWeight = FontWeight.Bold)
+                                Text("Партия № ${batch.batchId.toString().padStart(5, '0')}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(batch.expiresAt.toExpiryDateTimeDisplay(), modifier = Modifier.padding(top = 5.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(batch.currentStock, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(12.dp))
+                                Surface(color = DashboardRed.copy(alpha = .16f), shape = MaterialTheme.shapes.large) {
+                                    Text(batch.daysRemaining?.let { "$it ${if (it == 1) "день" else "дн."}" } ?: "2 дня", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = DashboardRed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    if (state.data.size > 3) {
+                        IconButton(
+                            onClick = { expanded = !expanded },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                if (expanded) "Свернуть список" else "Показать все партии",
+                                tint = DashboardGreen
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun String?.toExpiryDateTimeDisplay(): String {
+    val value = this ?: return "24"
+    val date = value.substringBefore('T').split('-')
+    val time = value.substringAfter('T', "").take(5)
+    return if (date.size == 3) "до ${date[2]}.${date[1]}.${date[0]}${if (time.isNotBlank()) ", $time" else ""}" else "24"
+}
+
+@Composable
+private fun PromotionSection(onDishesClick: () -> Unit) {
     val dishes = listOf("Стейк из лосося" to "1 490 ₽", "Салат «Цезарь» с креветками" to "790 ₽", "Чизкейк с ягодами" to "450 ₽")
-    SectionCard("Блюда для продвижения", "Все блюда") {
+    SectionCard("Блюда для продвижения", "Все блюда", onDishesClick) {
         dishes.forEachIndexed { index, (name, price) ->
             if (index != 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .35f))
             Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable { }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -294,10 +410,10 @@ private fun PromotionSection() {
 }
 
 @Composable
-private fun CategoriesSection() {
+private fun CategoriesSection(onDishesClick: () -> Unit) {
     val categories = listOf("Горячее" to 16, "Салаты" to 12, "Десерты" to 8, "В стоп-листе" to 6, "Супы" to 4, "Напитки" to 2)
     val colors = listOf(DashboardGreen, DashboardBlue, DashboardPurple, DashboardRed, DashboardYellow, Color.LightGray)
-    SectionCard("Количество блюд по категориям", "Все блюда") {
+    SectionCard("Количество блюд по категориям", "Все блюда", onDishesClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(130.dp)) {
                 Canvas(Modifier.size(130.dp)) {
@@ -323,9 +439,9 @@ private fun CategoriesSection() {
 }
 
 @Composable
-private fun SectionCard(title: String, action: String, content: @Composable () -> Unit) {
+private fun SectionCard(title: String, action: String, onActionClick: () -> Unit, content: @Composable () -> Unit) {
     StoqCard(modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) { Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); Text(action, modifier = Modifier.clip(MaterialTheme.shapes.small).clickable { }.padding(6.dp), color = DashboardGreen, style = MaterialTheme.typography.labelLarge) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) { Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); Text(action, modifier = Modifier.clip(MaterialTheme.shapes.small).clickable(onClick = onActionClick).padding(6.dp), color = DashboardGreen, style = MaterialTheme.typography.labelLarge) }
         Spacer(Modifier.height(8.dp))
         content()
     }
@@ -334,7 +450,6 @@ private fun SectionCard(title: String, action: String, content: @Composable () -
 private fun metricValue(index: Int) = listOf("487 320 ₽", "162 450 ₽", "248")[index]
 private fun metricGrowth(index: Int) = listOf("18%", "23%", "12%")[index]
 
-private data class DashboardMetric(val title: String, val value: String, val growth: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: Color)
 private data class StockProduct(val name: String, val amount: String, val id: String, val avatarRes: Int?)
 
 @Composable
