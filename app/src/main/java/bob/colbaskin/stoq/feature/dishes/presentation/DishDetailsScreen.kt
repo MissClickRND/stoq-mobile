@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.DatePickerDialog
@@ -39,6 +41,7 @@ import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.dishes.domain.model.Dish
 import bob.colbaskin.stoq.feature.dishes.domain.model.IngredientStockStatus
+import bob.colbaskin.stoq.feature.dashboard.data.model.DishDetailsStatisticsDto
 
 @Composable
 fun DishDetailsScreen(
@@ -57,7 +60,7 @@ fun DishDetailsScreen(
             onRefresh = { viewModel.load(id) },
             modifier = Modifier.fillMaxSize()
         ) {
-            DishDetailsContent(state.data, onBack, onStorageClick, onDelete = { confirmDeletion = true })
+            DishDetailsContent(state.data, onBack, onStorageClick, onDelete = { confirmDeletion = true }, statistics = viewModel.statistics)
         }
     }
     if (confirmDeletion) {
@@ -73,7 +76,7 @@ fun DishDetailsScreen(
 }
 
 @Composable
-private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: () -> Unit, onDelete: () -> Unit) {
+private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: () -> Unit, onDelete: () -> Unit, statistics: UiState<DishDetailsStatisticsDto>) {
     val colors = LocalColors.current
     LazyColumn(Modifier.fillMaxSize().background(colors.background), contentPadding = PaddingValues(start = StoqSpacing.ScreenHorizontal, top = 8.dp, end = StoqSpacing.ScreenHorizontal, bottom = StoqSpacing.ScreenHorizontal), verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)) {
         item {
@@ -85,9 +88,15 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: (
             StoqAsyncImage(dish.imageUrl, dish.name, Modifier.fillMaxWidth().height(235.dp).clip(MaterialTheme.shapes.medium), contentScale = ContentScale.Crop)
         }
         item { DishHero(dish) }
-        item { DetailMetrics(dish) }
+        item { DetailMetrics((statistics as? UiState.Success)?.data, if (statistics == UiState.Loading) "Загрузка…" else "Не получено") }
         item { Ingredients(dish) }
-        item { SalesChart() }
+        item {
+            when (statistics) {
+                UiState.Loading -> CircularProgressIndicator(Modifier.size(24.dp))
+                is UiState.Error -> Text(statistics.text, color = colors.error)
+                is UiState.Success -> SalesChart(statistics.data)
+            }
+        }
         item { KeyStock(dish, onStorageClick) }
     }
 }
@@ -106,9 +115,9 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: (
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 HeroValue("Цена продажи", dish.price.dataOrRubles(), Modifier.weight(1f))
                 VerticalDivider(Modifier.height(62.dp), color = colors.outline)
-                HeroValue("Себестоимость", dish.cost.dataOrRubles(), Modifier.weight(1f).padding(start = StoqSpacing.Medium))
+                HeroValue("Себестоимость", if (dish.cost < 0) "—" else dish.cost.dataOrRubles(), Modifier.weight(1f).padding(start = StoqSpacing.Medium))
                 VerticalDivider(Modifier.height(62.dp), color = colors.outline)
-                HeroValue("Наценка", dish.markup.dataOrPercent(), Modifier.weight(1f).padding(start = StoqSpacing.Medium), colors.success)
+                HeroValue("Наценка", if (dish.markup < 0) "—" else dish.markup.dataOrPercent(), Modifier.weight(1f).padding(start = StoqSpacing.Medium), colors.success)
             }
         }
     }
@@ -116,13 +125,13 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: (
 
 @Composable private fun HeroValue(label: String, value: String, modifier: Modifier, color: Color? = null) { val colors = LocalColors.current; Column(modifier) { Text(label, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary); Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color ?: colors.textPrimary) } }
 
-@Composable private fun DetailMetrics(dish: Dish) {
+@Composable private fun DetailMetrics(statistics: DishDetailsStatisticsDto?, unavailable: String) {
     val colors = LocalColors.current
     val items = listOf(
-        DetailMetric("Продано сегодня", dish.soldToday.dataOrText(), "24", "", Icons.Outlined.ShoppingCart, colors.success),
-        DetailMetric("Выручка за неделю", dish.weeklyRevenue.dataOrRubles(), "18 450 ₽", "", Icons.Outlined.BarChart, colors.success),
-        DetailMetric("Популярность", dish.popularity.takeIf { it >= 0 }?.let { "#$it" } ?: "24", "24", "", Icons.Outlined.StarOutline, colors.warning),
-        DetailMetric("Остатки ингредиентов", "24", "24", "", Icons.Outlined.Inventory2, colors.warning)
+        DetailMetric("Продано сегодня", statistics?.today?.toString() ?: unavailable, "", "", Icons.Outlined.ShoppingCart, colors.success),
+        DetailMetric("Выручка за неделю", statistics?.revenue?.let { "$it ₽" } ?: unavailable, "", "", Icons.Outlined.BarChart, colors.success),
+        DetailMetric("Популярность", statistics?.popularity?.let { "#$it" } ?: unavailable, "", "", Icons.Outlined.StarOutline, colors.warning),
+        DetailMetric("Доступно порций", statistics?.availablePortions?.toString() ?: unavailable, "", "", Icons.Outlined.Inventory2, colors.warning)
     )
     StoqMetricGrid(items.map { metric ->
         StoqMetric(metric.label, metric.value, metric.change, metric.icon, metric.tint, metric.note)
@@ -147,21 +156,44 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: (
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun SalesChart() {
-    val colors = LocalColors.current; var period by remember { mutableStateOf("За 14 дней") }; var menuOpen by remember { mutableStateOf(false) }; var customDates by remember { mutableStateOf(false) }; val pickerState = rememberDateRangePickerState()
-    SectionCard("Динамика продаж", period, onActionClick = { menuOpen = true }) { Text("24", color = colors.textSecondary) }
-    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) { listOf("За 7 дней", "За 14 дней", "За 30 дней", "Выбрать даты").forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { menuOpen = false; if (option == "Выбрать даты") customDates = true else period = option }) } }
-    if (customDates) DatePickerDialog(onDismissRequest = { customDates = false }, confirmButton = { Text("Применить", Modifier.padding(16.dp).clickable { period = "Свой период"; customDates = false }, color = colors.primaryDark, fontWeight = FontWeight.Bold) }, dismissButton = { Text("Отмена", Modifier.padding(16.dp).clickable { customDates = false }) }) { DateRangePicker(state = pickerState, modifier = Modifier.weight(1f, fill = false)) }
+@Composable private fun SalesChart(statistics: DishDetailsStatisticsDto) {
+    val colors = LocalColors.current
+    var days by rememberSaveable(statistics.dishId) { mutableIntStateOf(7) }
+    var menuOpen by remember { mutableStateOf(false) }
+    val periods = listOf(1 to "Сегодня", 3 to "За 3 дня", 7 to "За 7 дней")
+    val sales = remember(statistics.sales, days) { filterDishSalesPeriod(statistics.sales, days) }
+    SectionCard(
+        "Динамика продаж",
+        action = periods.first { it.first == days }.second,
+        onActionClick = { menuOpen = true },
+        actionMenu = {
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, containerColor = colors.surface, shape = MaterialTheme.shapes.medium) {
+                periods.forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label, color = if (days == value) colors.primaryDark else colors.textPrimary) },
+                        trailingIcon = { if (days == value) Icon(Icons.Outlined.Check, null, tint = colors.primaryDark) },
+                        onClick = { days = value; menuOpen = false }
+                    )
+                }
+            }
+        }
+    ) {
+        if (sales.isEmpty()) Text("За выбранный период данных нет")
+        else {
+            SalesBars(sales.map { it.quantity }, sales.map { it.label })
+            Text("Продано за период: ${sales.sumOf { it.quantity }}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+        }
+    }
 }
 
 @Composable
-private fun SalesBars(values: List<Int>) {
+private fun SalesBars(values: List<Int>, labels: List<String>) {
     val colors = LocalColors.current
-    val max = (values.maxOrNull() ?: 30).toFloat()
+    val max = (values.maxOrNull() ?: 0).coerceAtLeast(1).toFloat()
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().height(132.dp)) {
             Column(Modifier.width(26.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                listOf("30", "20", "10", "0").forEach { Text(it, color = colors.textSecondary, style = MaterialTheme.typography.labelSmall) }
+                (3 downTo 0).forEach { Text((max * it / 3).toInt().toString(), color = colors.textSecondary, style = MaterialTheme.typography.labelSmall) }
             }
             Canvas(Modifier.weight(1f).fillMaxHeight()) {
                 val step = size.width / values.size
@@ -184,7 +216,7 @@ private fun SalesBars(values: List<Int>) {
         }
         Row(Modifier.fillMaxWidth().padding(start = 26.dp), horizontalArrangement = Arrangement.SpaceAround) {
             values.indices.filter { it % (if (values.size > 10) 3 else 2) == 0 }.forEach { index ->
-                Text("${10 + index} мая", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                Text(labels[index], style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
             }
         }
     }
@@ -210,19 +242,22 @@ private fun SalesBars(values: List<Int>) {
     }
 }
 
-@Composable private fun SectionCard(title: String, action: String? = null, showChevron: Boolean = true, onActionClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+@Composable private fun SectionCard(title: String, action: String? = null, showChevron: Boolean = true, onActionClick: (() -> Unit)? = null, actionMenu: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     val colors = LocalColors.current
     Card(colors = CardDefaults.cardColors(containerColor = colors.surface), shape = MaterialTheme.shapes.medium) {
         Column(Modifier.padding(StoqSpacing.Large)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = colors.textPrimary)
                 if (action != null) {
+                    Box {
                     Surface(Modifier.clickable { onActionClick?.invoke() }, shape = MaterialTheme.shapes.small, border = androidx.compose.foundation.BorderStroke(1.dp, colors.outline), color = colors.surface) {
                         Row(Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(action, style = MaterialTheme.typography.labelMedium)
                             Spacer(Modifier.width(4.dp))
                             Icon(Icons.Outlined.ExpandMore, null, Modifier.size(16.dp))
                         }
+                    }
+                    actionMenu?.invoke()
                     }
                 } else if (showChevron) {
                     Icon(

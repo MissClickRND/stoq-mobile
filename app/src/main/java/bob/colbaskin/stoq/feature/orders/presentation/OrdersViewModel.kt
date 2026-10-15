@@ -177,7 +177,7 @@ class OrdersViewModel @Inject constructor(
     }
 
     private fun refresh() = viewModelScope.launch {
-        val hasData = _state.value.orders.isNotEmpty()
+        val hasData = _state.value.loadState is UiState.Success
         _state.update { if (hasData) it.copy(isRefreshing = true) else it.copy(loadState = UiState.Loading) }
         val ordersRequest = async { repository.orders() }
         val menuRequest = async { repository.menu() }

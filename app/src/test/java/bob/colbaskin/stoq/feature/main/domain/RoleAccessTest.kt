@@ -10,7 +10,7 @@ class RoleAccessTest {
     }
 
     @Test fun managerHasAnalyticsAndAllBusinessSections() {
-        assertEquals(setOf(AppSection.Dashboard, AppSection.Storage, AppSection.Supplies, AppSection.Orders, AppSection.Dishes), UserRole.Manager.accessibleSections())
+        assertEquals(setOf(AppSection.Dashboard, AppSection.Storage, AppSection.Supplies, AppSection.Orders, AppSection.Dishes, AppSection.Logs), UserRole.Manager.accessibleSections())
     }
 
     @Test fun waiterCannotOpenAnalyticsOrAdministration() {

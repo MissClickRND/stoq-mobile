@@ -47,6 +47,8 @@ import compose.icons.tablericons.TruckDelivery
 import compose.icons.tablericons.ToolsKitchen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material.icons.outlined.ReceiptLong
+import bob.colbaskin.stoq.feature.logs.presentation.LogsScreen
 import kotlinx.serialization.Serializable
 
 private const val DashboardRoute = "dashboard"
@@ -54,6 +56,7 @@ private const val ProductsRoute = "products"
 private const val SupplyRoute = "supply"
 private const val OrdersRoute = "orders"
 private const val DishesRoute = "dishes"
+private const val LogsRoute = "logs"
 
 @Serializable
 private data object AdminDestination
@@ -101,6 +104,7 @@ private val mainSections = listOf(
     BottomBarItem("Поставки", SupplyRoute, TablerIcons.TruckDelivery),
     BottomBarItem("Заказы", OrdersRoute, TablerIcons.ShoppingCart),
     BottomBarItem("Блюда", DishesRoute, TablerIcons.ToolsKitchen),
+    BottomBarItem("Логи", LogsRoute, Icons.Outlined.ReceiptLong),
     BottomBarItem("Админ", adminRoute, Icons.Outlined.AdminPanelSettings)
 )
 
@@ -121,6 +125,7 @@ private fun RoleNavigation(user: AuthUser?) {
             SupplyRoute -> AppSection.Supplies
             OrdersRoute -> AppSection.Orders
             DishesRoute -> AppSection.Dishes
+            LogsRoute -> AppSection.Logs
             else -> AppSection.Admin
         } in sections
     }
@@ -165,6 +170,7 @@ private fun RoleNavigation(user: AuthUser?) {
             startDestination = startRoute,
             modifier = Modifier.padding(innerPadding)
         ) {
+            if (AppSection.Logs in sections) composable(LogsRoute) { LogsScreen() }
             if (AppSection.Dashboard in sections) composable(DashboardRoute) {
                 DashboardScreen(
                     onProductsClick = { navController.navigate(ProductsRoute) { launchSingleTop = true } },

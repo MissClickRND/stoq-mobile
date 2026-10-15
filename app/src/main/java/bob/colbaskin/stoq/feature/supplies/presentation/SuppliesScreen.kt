@@ -127,7 +127,8 @@ fun SuppliesScreen(
             SupplyScanBanner(onScanSupply)
         }
         item { DraftsBanner(viewModel.drafts.size, "поставка", onDraftsClick) }
-        item { StorageMetrics(supplies) }
+        item { StorageMetrics(supplies, (viewModel.statistics as? UiState.Success)?.data) }
+        item { (viewModel.statistics as? UiState.Error)?.let { Text(it.text, color = CustomTheme.colors.error) } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 StorageFilter("Все", supplies.size.toString(), Icons.Outlined.Inventory2, filter == null, { filter = null })
@@ -173,12 +174,14 @@ private fun SearchField(value: String, onChange: (String) -> Unit, onFocusChange
 }
 
 @Composable
-private fun StorageMetrics(supplies: List<SupplyData>) {
+private fun StorageMetrics(supplies: List<SupplyData>, statistics: bob.colbaskin.stoq.feature.dashboard.data.model.SupplyStatisticsDto?) {
     StoqMetricGrid(listOf(
-        StoqMetric("Всего поставок", supplies.size.toString(), "24", Icons.Outlined.LocalShipping, CustomTheme.colors.success),
-        StoqMetric("В пути", supplies.count { it.status == "IN_TRANSIT" }.toString(), "24", Icons.Outlined.LocalShipping, CustomTheme.colors.warning),
-        StoqMetric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "24", Icons.Outlined.CheckCircle, CustomTheme.colors.success),
-        StoqMetric("Сумма поставок", supplies.sumOf { it.totalPrice ?: 0.0 }.takeIf { it > 0 }?.toRubles() ?: "1 250 ₽", "1 250 ₽", Icons.Outlined.Inventory2, CustomTheme.colors.success)
+        StoqMetric("Поставок за месяц", statistics?.count?.toString() ?: "—", "", Icons.Outlined.LocalShipping, CustomTheme.colors.success),
+        StoqMetric("В пути", supplies.count { it.status == "IN_TRANSIT" }.toString(), "", Icons.Outlined.LocalShipping, CustomTheme.colors.warning),
+        StoqMetric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "", Icons.Outlined.CheckCircle, CustomTheme.colors.success),
+        StoqMetric("Позиций за месяц", statistics?.products?.toString() ?: "—", "", Icons.Outlined.Inventory2, CustomTheme.colors.warning),
+        StoqMetric("Средняя поставка", statistics?.average?.toRubles() ?: "—", "", Icons.Outlined.CheckCircle, CustomTheme.colors.success),
+        StoqMetric("Сумма поставок", statistics?.total?.toRubles() ?: "—", "", Icons.Outlined.Inventory2, CustomTheme.colors.success)
     ))
 }
 
@@ -412,7 +415,9 @@ fun CreateSupplyScreen(
     }
     val hasChanges = hasUnsavedChanges && currentDraft.hasContent
     BackHandler(enabled = hasChanges) { showExitDialog = true }
+    PullToRefreshContainer(viewModel.isRefreshingProducts, { viewModel.refreshProducts(search) }, Modifier.fillMaxSize()) {
     LazyColumn(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        viewModel.productsRefreshError?.let { message -> item { Text(message, color = CustomTheme.colors.error) } }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.ArrowBack, "Назад", modifier = Modifier.clip(CircleShape).clickable { if (hasChanges) showExitDialog = true else onBack() }.padding(6.dp))
@@ -502,6 +507,7 @@ fun CreateSupplyScreen(
                 }
             }
         }
+    }
     }
     if (showDatePicker) DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { datePickerState.selectedDateMillis?.let { date = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)); hasUnsavedChanges = true }; showDatePicker = false }) { Text("Выбрать") } }, dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } }) { DatePicker(datePickerState) }
     if (viewModel.savingState == UiState.Loading) LoadingScreen()

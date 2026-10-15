@@ -2,6 +2,7 @@ package bob.colbaskin.stoq.feature.products.data.realtime
 
 import android.util.Log
 import bob.colbaskin.stoq.BuildConfig
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import io.socket.client.IO
 import io.socket.client.Socket
 import io.socket.engineio.client.transports.WebSocket
@@ -27,7 +28,7 @@ class InventorySocketClient @Inject constructor(
     private var users = 0
     private var productIds = emptyList<Long>()
     private val socket: Socket by lazy {
-        IO.socket(BuildConfig.BASE_API_URL.trimEnd('/') + "/inventory", IO.Options().apply {
+        IO.socket(BuildConfig.BASE_API_URL.toHttpUrl().newBuilder().encodedPath("/inventory").query(null).build().toString(), IO.Options().apply {
             transports = arrayOf(WebSocket.NAME)
             reconnection = true
             callFactory = httpClient

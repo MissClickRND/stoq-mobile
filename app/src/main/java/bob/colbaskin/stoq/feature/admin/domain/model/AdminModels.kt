@@ -47,14 +47,15 @@ data class EmployeeInvitation(
     val createdAt: String,
     val expiresAt: String,
     val status: InvitationStatus,
-    val acceptedBy: String? = null
-) {
-    val link: String
-        get() = "https://stoq.app/invite/$code"
-}
+    val acceptedBy: String? = null,
+    val link: String = ""
+)
 
 data class AdminSnapshot(
     val venue: VenueProfile,
     val employees: List<ManagedEmployee>,
-    val invitations: List<EmployeeInvitation>
+    val invitations: List<EmployeeInvitation>,
+    val statistics: AdminStatistics? = null
 )
+
+data class AdminStatistics(val employees: Int, val invitations: Int, val requests: Int, val admins: Int)

@@ -11,6 +11,21 @@ import retrofit2.http.DELETE
 import retrofit2.http.Path
 
 interface AuthApiService {
+    @GET("auth/admin/invitations") suspend fun invitations(): List<InvitationDto>
+    @POST("auth/admin/invitations") suspend fun createInvitation(@Body request: CreateInvitationDto): InvitationDto
+    @PATCH("auth/admin/invitations/{id}/revoke") suspend fun revokeInvitation(@Path("id") id: String)
+    @DELETE("auth/admin/invitations/{id}") suspend fun deleteInvitation(@Path("id") id: String)
+    @PATCH("auth/admin/users/{id}/block") suspend fun setUserBlocked(@Path("id") id: Long, @Body request: SetUserBlockDto)
+
+    @GET("auth/admin/users")
+    suspend fun users(): List<AdminUserDto>
+
+    @GET("auth/admin/restaurant")
+    suspend fun restaurant(): RestaurantDto
+
+    @PATCH("auth/admin/users/{id}/role")
+    suspend fun changeUserRole(@Path("id") id: Long, @Body request: ApproveUserDto)
+
     @GET("restaurants")
     suspend fun restaurants(): List<RestaurantDto>
 

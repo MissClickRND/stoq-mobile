@@ -80,6 +80,7 @@ import bob.colbaskin.stoq.common.designsystem.theme.CustomTheme
 import bob.colbaskin.stoq.feature.products.data.StorageProduct
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Package
+import bob.colbaskin.stoq.feature.dashboard.data.model.InventoryStatisticsDto
 
 private enum class ProductStatus { Active, Depleted, Expired, RunningOut, Unknown }
 
@@ -115,6 +116,14 @@ fun StorageScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var productToDelete by remember { mutableStateOf<Product?>(null) }
     val inventoryState = viewModel.state
+    if (viewModel.writeOffsVisible) {
+        WriteOffsDialog(
+            viewModel.writeOffs, viewModel::hideWriteOffs, { viewModel.loadWriteOffs() },
+            viewModel.isWriteOffsRefreshing, viewModel.writeOffsError,
+            viewModel.disposalTarget, viewModel.disposalState,
+            viewModel::selectDisposal, viewModel::dismissDisposal, viewModel::confirmDisposal
+        )
+    }
     val catalogProducts = (inventoryState as? UiState.Success)?.data.orEmpty().map(StorageProduct::toProduct)
     val categoryStatuses = listOf(
         "Все" to null,
@@ -173,7 +182,13 @@ fun StorageScreen(
             }
         }
         item { DraftsBanner(viewModel.inventoryDrafts.size, "инвентаризация", onInventoryDraftsClick) }
-        item { ProductMetrics(catalogProducts) }
+        item { ProductMetrics((viewModel.statistics as? UiState.Success)?.data) }
+        item {
+            (viewModel.statistics as? UiState.Error)?.let { error ->
+                Text(error.text, color = CustomTheme.colors.error, modifier = Modifier.clickable { viewModel.refresh() })
+            }
+        }
+        item { WriteOffHistoryEntry(viewModel::showWriteOffs) }
         item { StoqPrimaryButton(text = "Провести инвентаризацию", onClick = onInventoryClick) }
         item {
             Row(
@@ -363,13 +378,15 @@ private fun ProductSearchSuggestions(products: List<Product>, onSelected: (Produ
 }
 
 @Composable
-private fun ProductMetrics(products: List<Product>) {
+private fun ProductMetrics(statistics: InventoryStatisticsDto?) {
     val colors = CustomTheme.colors
     val metrics = listOf(
-        StorageMetric("Всего продуктов", products.size.toString(), "24", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
-        StorageMetric("С низким остатком", "24", "24", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
-        StorageMetric("Скоро истекут", products.count { it.expiry != "24" }.toString(), "24", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
-        StorageMetric("Поставщиков", "24", "24", "активных поставщиков", Icons.Outlined.Group, colors.success)
+        StorageMetric("Всего продуктов", statistics?.totalProducts?.toString() ?: "—", "", "на складе", Icons.Outlined.Inventory2, colors.success),
+        StorageMetric("С низким остатком", statistics?.lowStockProducts?.size?.toString() ?: "—", "", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
+        StorageMetric("Скоро истекут", statistics?.expiringProducts?.toString() ?: "—", "", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
+        StorageMetric("Поставщиков", "24", "", "активных поставщиков", Icons.Outlined.Group, colors.success),
+        StorageMetric("Испорчены", statistics?.spoiledProducts?.toString() ?: "—", "", "данные сервера", Icons.Outlined.DeleteOutline, colors.error),
+        StorageMetric("Закончились", statistics?.depletedProducts?.toString() ?: "—", "", "нет доступного остатка", Icons.Outlined.Inventory2, colors.error)
     )
     StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint, it.supportingText) })
 }

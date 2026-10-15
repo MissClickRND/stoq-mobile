@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -42,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,6 +71,7 @@ import bob.colbaskin.stoq.common.core.UiState
 import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
 import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
 import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.admin.domain.model.AdminSnapshot
@@ -82,7 +85,7 @@ import bob.colbaskin.stoq.feature.admin.domain.model.VenueProfile
 @Composable
 fun AdminScreen(viewModel: AdminViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
-    RefreshOnResume { viewModel.refresh() }
+    RefreshOnResume(remember(viewModel) { { viewModel.refresh() } })
     val snapshot = state.snapshot
     if (snapshot == null) {
         when (val load = state.loadState) {
@@ -94,6 +97,7 @@ fun AdminScreen(viewModel: AdminViewModel = hiltViewModel()) {
     }
     val colors = LocalColors.current
 
+    PullToRefreshContainer(state.loadState == UiState.Loading, { viewModel.refresh() }, Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth().background(colors.background),
         contentPadding = PaddingValues(
@@ -121,6 +125,7 @@ fun AdminScreen(viewModel: AdminViewModel = hiltViewModel()) {
                 onSelected = { viewModel.onAction(AdminAction.SectionSelected(it)) }
             )
         }
+        if (state.isMutating) item { androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth()) }
         state.notice?.let { notice ->
             item {
                 Surface(
@@ -141,6 +146,7 @@ fun AdminScreen(viewModel: AdminViewModel = hiltViewModel()) {
             AdminSection.Employees -> employeeItems(snapshot, state, viewModel::onAction)
             AdminSection.Invitations -> invitationItems(snapshot, state, viewModel::onAction)
         }
+    }
     }
 }
 
@@ -257,7 +263,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.employeeItems(
         )
     }
     item {
-        SectionHeading("Сотрудники", "Показаны заявки, ожидающие подтверждения. Для одобрения выберите роль в карточке.")
+        SectionHeading("Сотрудники", "Команда заведения и заявки. Для подтверждения заявки выберите роль в карточке.")
     }
     val employees = snapshot.employees.filter {
         it.name.contains(state.employeeQuery, ignoreCase = true) || it.email.contains(state.employeeQuery, ignoreCase = true)
@@ -269,6 +275,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.employeeItems(
             EmployeeCard(
                 employee = employees[index],
                 onRoleChanged = { onAction(AdminAction.EmployeeRoleChanged(employees[index].id, it)) },
+                onBlocked = { blocked -> onAction(AdminAction.EmployeeBlocked(employees[index].id, blocked)) },
                 onDelete = { onAction(AdminAction.EmployeeDeleted(employees[index].id)) }
             )
         }
@@ -279,10 +286,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.employeeItems(
 private fun TeamMetrics(snapshot: AdminSnapshot) {
     val employees = snapshot.employees
     val metrics = listOf(
-        TeamMetric("Всего сотрудников", "42", "API возвращает только ожидающие заявки", Icons.Outlined.Groups, LocalColors.current.success),
-        TeamMetric("Активных", "18", "Нет данных от сервера", Icons.Outlined.PersonOutline, LocalColors.current.success),
-        TeamMetric("Ожидают подтверждения", employees.count { it.status == EmployeeStatus.Pending }.toString(), "Приглашения отправлены", Icons.Outlined.AccessTime, LocalColors.current.warning),
-        TeamMetric("Администраторов", "3", "Нет данных от сервера", Icons.Outlined.AdminPanelSettings, LocalColors.current.secondary)
+        TeamMetric("Всего сотрудников", snapshot.statistics?.employees?.toString() ?: "—", "", Icons.Outlined.Groups, LocalColors.current.success),
+        TeamMetric("Активных", employees.count { it.status == EmployeeStatus.Active }.toString(), "", Icons.Outlined.PersonOutline, LocalColors.current.success),
+        TeamMetric("Ожидают подтверждения", snapshot.statistics?.requests?.toString() ?: "—", "", Icons.Outlined.AccessTime, LocalColors.current.warning),
+        TeamMetric("Администраторов", snapshot.statistics?.admins?.toString() ?: "—", "", Icons.Outlined.AdminPanelSettings, LocalColors.current.secondary)
     )
     StoqMetricGrid(metrics.map { metric ->
         StoqMetric(metric.label, metric.value, icon = metric.icon, tint = metric.tint, supportingText = metric.subtitle)
@@ -293,9 +300,11 @@ private fun TeamMetrics(snapshot: AdminSnapshot) {
 private fun EmployeeCard(
     employee: ManagedEmployee,
     onRoleChanged: (EmployeeRole) -> Unit,
+    onBlocked: (Boolean) -> Unit,
     onDelete: () -> Unit
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showBlockDialog by remember { mutableStateOf(false) }
     StoqCard {
         Row(verticalAlignment = Alignment.Top) {
             Avatar(employee.initials)
@@ -312,7 +321,7 @@ private fun EmployeeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)
                 ) {
-                    RolePicker(employee.role, onRoleChanged, Modifier.weight(1f), placeholder = if (employee.status == EmployeeStatus.Pending) "Выбрать роль" else null)
+                    RolePicker(employee.role, onRoleChanged, Modifier.weight(1f), placeholder = if (employee.status == EmployeeStatus.Pending) "Выбрать роль" else null, allowAdministrator = employee.status != EmployeeStatus.Pending)
                     StoqStatusPill(employee.status.title, employee.status.tone())
                 }
                 Text(
@@ -321,6 +330,12 @@ private fun EmployeeCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (employee.status != EmployeeStatus.Pending) {
+                    OutlinedButton(onClick = { showBlockDialog = true }, modifier = Modifier.padding(top = StoqSpacing.Small)) {
+                        Icon(Icons.Outlined.Block, null, Modifier.size(16.dp))
+                        Text(if (employee.status == EmployeeStatus.Blocked) "Разблокировать" else "Заблокировать", Modifier.padding(start = 6.dp))
+                    }
+                }
             }
         }
     }
@@ -331,6 +346,16 @@ private fun EmployeeCard(
             text = { Text("${employee.name} потеряет доступ к заведению. Восстановить запись автоматически не получится.") },
             confirmButton = { Button(onClick = { showDeleteDialog = false; onDelete() }) { Text("Удалить") } },
             dismissButton = { OutlinedButton(onClick = { showDeleteDialog = false }) { Text("Отмена") } }
+        )
+    }
+    if (showBlockDialog) {
+        val blocked = employee.status != EmployeeStatus.Blocked
+        AlertDialog(
+            onDismissRequest = { showBlockDialog = false },
+            title = { Text(if (blocked) "Заблокировать сотрудника?" else "Восстановить доступ?") },
+            text = { Text(if (blocked) "${employee.name} потеряет доступ к заведению до разблокировки." else "${employee.name} снова сможет работать в заведении.") },
+            confirmButton = { TextButton(onClick = { showBlockDialog = false; onBlocked(blocked) }) { Text(if (blocked) "Заблокировать" else "Разблокировать") } },
+            dismissButton = { TextButton(onClick = { showBlockDialog = false }) { Text("Отмена") } }
         )
     }
 }
@@ -347,7 +372,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.invitationItems(
             generatedInvitation = state.generatedInvitation,
             onRoleChanged = { onAction(AdminAction.InviteRoleChanged(it)) },
             onDurationChanged = { onAction(AdminAction.InviteDurationChanged(it)) },
-            onCreate = { onAction(AdminAction.InviteCreated) }
+            onCreate = { onAction(AdminAction.InviteCreated) },
+            isCreating = state.isMutating
         )
     }
     item { SectionHeading("Активность приглашений", "Ссылки можно копировать, отключать или удалять прямо из карточки.") }
@@ -371,7 +397,8 @@ private fun InvitationCreator(
     generatedInvitation: EmployeeInvitation?,
     onRoleChanged: (EmployeeRole) -> Unit,
     onDurationChanged: (Int) -> Unit,
-    onCreate: () -> Unit
+    onCreate: () -> Unit,
+    isCreating: Boolean
 ) {
     StoqCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -391,7 +418,7 @@ private fun InvitationCreator(
             RolePicker(role, onRoleChanged, Modifier.weight(1f))
             DurationPicker(durationHours, onDurationChanged, Modifier.weight(1f))
         }
-        StoqPrimaryButton("Создать ссылку", onCreate, Modifier.padding(top = StoqSpacing.Medium))
+        StoqPrimaryButton(if (isCreating) "Создаём…" else "Создать ссылку", onCreate, Modifier.padding(top = StoqSpacing.Medium), enabled = !isCreating)
         generatedInvitation?.let { invitation ->
             GeneratedInvitationLink(invitation)
         }
@@ -535,8 +562,9 @@ private fun InvitationCard(
 }
 
 @Composable
-private fun RolePicker(value: EmployeeRole, onSelected: (EmployeeRole) -> Unit, modifier: Modifier = Modifier, placeholder: String? = null) {
-    SelectPicker(placeholder ?: value.title, listOf(EmployeeRole.Manager, EmployeeRole.Waiter, EmployeeRole.Storekeeper).map { it.title }, modifier) { title ->
+private fun RolePicker(value: EmployeeRole, onSelected: (EmployeeRole) -> Unit, modifier: Modifier = Modifier, placeholder: String? = null, allowAdministrator: Boolean = true) {
+    val roles = listOf(EmployeeRole.Administrator, EmployeeRole.Manager, EmployeeRole.Waiter, EmployeeRole.Storekeeper).filter { allowAdministrator || it != EmployeeRole.Administrator }
+    SelectPicker(placeholder ?: value.title, roles.map { it.title }, modifier) { title ->
         onSelected(EmployeeRole.entries.first { it.title == title })
     }
 }

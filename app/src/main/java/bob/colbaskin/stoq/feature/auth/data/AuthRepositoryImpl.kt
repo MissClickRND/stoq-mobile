@@ -60,14 +60,8 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun refreshProfile(): ApiResult<AuthUser> = withContext(Dispatchers.IO) {
         safeApiCall(apiCall = {
-            val response = try { api.status() } catch (error: HttpException) {
-                if (error.code() != 401) throw error
-                try { api.refresh() } catch (refreshError: HttpException) {
-                    if (refreshError.code() == 401 || refreshError.code() == 403) cookies.clear()
-                    throw refreshError
-                }
-                api.status()
-            }
+            // A single serialized refresh/retry is handled by SessionAuthenticator.
+            val response = api.status()
             check(response.authenticated)
             val previous = preferences.getUserPreferences().first().user
             val user = response.user.toDomain().let { current ->

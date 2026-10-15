@@ -219,13 +219,15 @@ fun CreateOrderScreen(
             onRetry = { editOrderId?.let(viewModel::startEditing) ?: viewModel.reload() },
             onBack = onBack
         )
-        is UiState.Success -> CreateOrderContent(
+        is UiState.Success -> PullToRefreshContainer(state.isRefreshing, viewModel::reload, Modifier.fillMaxSize()) {
+        CreateOrderContent(
             state = state,
             onBack = { if (hasChanges) showExitDialog = true else onBack() },
             onOrdersClick = onOrdersClick,
             onSaveAndReturn = { viewModel.saveDraft(onOrdersClick, showMessage = false, markClean = true) },
             onAction = viewModel::onAction
         )
+        }
     }
     UnsavedChangesDialog(
         visible = showExitDialog,

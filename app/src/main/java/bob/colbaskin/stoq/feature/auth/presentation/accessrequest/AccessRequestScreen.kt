@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -33,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.PullToRefreshContainer
 import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
@@ -53,6 +55,7 @@ fun AccessRequestScreen(
     var restaurantsExpanded by remember { mutableStateOf(false) }
     val hasFilledFields = state.fullName.isNotBlank() && state.email.isNotBlank() && selectedRestaurant != null && state.password.length >= 4
     LaunchedEffect(state.requestState) { if (state.requestState is UiState.Success) onRequestSent() }
+    PullToRefreshContainer(state.restaurantsState == UiState.Loading, { viewModel.onAction(AccessRequestAction.ReloadRestaurants) }, Modifier.fillMaxSize()) {
     AuthScreenContainer(
         selectedTab = AuthTab.EmployeeRegistration,
         title = "Регистрация сотрудника",
@@ -149,5 +152,6 @@ fun AccessRequestScreen(
         if (state.requestState is UiState.Error) {
             Text(state.requestState.text, Modifier.padding(top = StoqSpacing.Small))
         }
+    }
     }
 }

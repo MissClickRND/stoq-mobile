@@ -165,7 +165,7 @@ fun SupplyDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(StoqSpacing.Medium)
     ) {
         item { DetailHeader(supplyNumber, onBack, editing, onEditClick = { editing = !editing }) }
-        item { SupplyOverview(supply) }
+        item { SupplyOverview(supply, (viewModel.statistics as? UiState.Success)?.data) }
         item {
             Column {
                 Text("Товары в поставке", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
@@ -305,13 +305,13 @@ private fun DetailHeader(supplyNumber: String, onBack: () -> Unit, editing: Bool
 }
 
 @Composable
-private fun SupplyOverview(supply: Supply?) {
+private fun SupplyOverview(supply: Supply?, statistics: bob.colbaskin.stoq.feature.dashboard.data.model.SupplyDetailsStatisticsDto?) {
     val colors = LocalColors.current
     val metrics = listOf(
         DetailMetric("ID поставки", supply?.id?.toString() ?: "24", Icons.AutoMirrored.Outlined.ReceiptLong, colors.primaryDark),
         DetailMetric("Поступила", supply?.receivedAt?.take(10) ?: "24", Icons.Outlined.CalendarToday, colors.primaryDark),
-        DetailMetric("Позиций", supply?.items?.size?.toString() ?: "24", Icons.Outlined.Inventory2, colors.success),
-        DetailMetric("Сумма", supply?.totalPrice?.toRubles() ?: "1 250 ₽", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
+        DetailMetric("Позиций", statistics?.positions?.toString() ?: "—", Icons.Outlined.Inventory2, colors.success),
+        DetailMetric("Сумма", statistics?.total?.toRubles() ?: "—", Icons.AutoMirrored.Outlined.ReceiptLong, colors.success),
         DetailMetric("Принял", supply?.supplier ?: "24", Icons.Outlined.PersonOutline, colors.secondary)
     )
     Column {
