@@ -175,10 +175,10 @@ private fun SearchField(value: String, onChange: (String) -> Unit, onFocusChange
 @Composable
 private fun StorageMetrics(supplies: List<SupplyData>) {
     StoqMetricGrid(listOf(
-        StoqMetric("Всего поставок", supplies.size.toString(), "мог", Icons.Outlined.LocalShipping, CustomTheme.colors.success),
-        StoqMetric("В пути", supplies.count { it.status == "IN_TRANSIT" }.toString(), "мог", Icons.Outlined.LocalShipping, CustomTheme.colors.warning),
-        StoqMetric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "мог", Icons.Outlined.CheckCircle, CustomTheme.colors.success),
-        StoqMetric("Сумма поставок", supplies.sumOf { it.totalPrice ?: 0.0 }.takeIf { it > 0 }?.toRubles() ?: "мог", "мог", Icons.Outlined.Inventory2, CustomTheme.colors.success)
+        StoqMetric("Всего поставок", supplies.size.toString(), "24", Icons.Outlined.LocalShipping, CustomTheme.colors.success),
+        StoqMetric("В пути", supplies.count { it.status == "IN_TRANSIT" }.toString(), "24", Icons.Outlined.LocalShipping, CustomTheme.colors.warning),
+        StoqMetric("Принято поставок", supplies.count { it.status == "RECEIVED" }.toString(), "24", Icons.Outlined.CheckCircle, CustomTheme.colors.success),
+        StoqMetric("Сумма поставок", supplies.sumOf { it.totalPrice ?: 0.0 }.takeIf { it > 0 }?.toRubles() ?: "1 250 ₽", "1 250 ₽", Icons.Outlined.Inventory2, CustomTheme.colors.success)
     ))
 }
 
@@ -246,7 +246,7 @@ private fun String.toSupplyStatusLabel() = when (this) {
     "RECEIVED" -> "Принята"
     "IN_TRANSIT" -> "В пути"
     "CANCELLED" -> "Отменена"
-    else -> "мог"
+    else -> "24"
 }
 
 @Composable
@@ -271,22 +271,22 @@ private fun SupplyCard(supply: SupplyData, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(supply.number, style = MaterialTheme.typography.titleMedium)
-                        Text(supply.supplier ?: "мог", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text("мог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(supply.supplier ?: "24", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("24", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     StatusPill(status)
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Info(Icons.Outlined.CalendarToday, supply.receivedAt?.take(10) ?: "мог", Modifier.weight(1f))
+                    Info(Icons.Outlined.CalendarToday, supply.receivedAt?.take(10) ?: "24", Modifier.weight(1f))
                     Info(Icons.Outlined.Inventory2, "${supply.items.size} позиций", Modifier.weight(1f), alignEnd = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.PersonOutline, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Text(supply.supplier ?: "мог", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    Text(supply.totalPrice?.toRubles() ?: "мог", style = MaterialTheme.typography.titleMedium)
+                    Text(supply.supplier ?: "24", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    Text(supply.totalPrice?.toRubles() ?: "1 250 ₽", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
@@ -390,10 +390,10 @@ fun CreateSupplyScreen(
                 SupplyProduct(
                     productId = item.productId,
                     name = item.name,
-                    category = item.unit ?: "мог",
+                    category = item.unit ?: "24",
                     quantity = item.quantity.toSupplyNumber(),
                     price = item.price.toSupplyNumber(),
-                    batch = "мог",
+                    batch = "24",
                     expires = item.expiresAt?.toExpiryDisplayValue() ?: "Укажите срок"
                 )
             }
@@ -454,13 +454,13 @@ fun CreateSupplyScreen(
                     viewModel.products.filter { it.name.contains(search, true) }.forEach { candidate ->
                         Row(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable {
                             if (products.none { it.productId == candidate.id }) {
-                                products = listOf(SupplyProduct(candidate.id, candidate.name, "мог", "1", "0", "мог", "Укажите срок")) + products
+                                products = listOf(SupplyProduct(candidate.id, candidate.name, "24", "1", "0", "24", "Укажите срок")) + products
                                 hasUnsavedChanges = true
                             }
                             search = ""
                             showProductSuggestions = false
                         }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Add, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(8.dp)); Text(candidate.name, Modifier.weight(1f)); Text(candidate.unit?.shortName ?: "мог", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Outlined.Add, null, tint = CustomTheme.colors.success); Spacer(Modifier.width(8.dp)); Text(candidate.name, Modifier.weight(1f)); Text(candidate.unit?.shortName ?: "24", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

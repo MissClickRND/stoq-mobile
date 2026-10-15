@@ -27,7 +27,7 @@ private fun StorageProduct.toInventoryProduct() = InventoryProduct(
     batchId = batchId,
     name = name,
     article = id.toString(),
-    category = "мог",
+    category = "24",
     systemQuantity = availableQuantity,
-    unit = unit.ifBlank { "мог" }
+    unit = unit.ifBlank { "24" }
 )

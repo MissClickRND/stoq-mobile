@@ -7,7 +7,7 @@ data class DishDto(
     val id: Long,
     val name: String,
     val category: String? = null,
-    val description: String = "мог",
+    val description: String = "24",
     val imageURL: String? = null,
     val salePrice: Double? = null,
     val costPrice: Double? = null,

@@ -303,7 +303,7 @@ private fun ExpiringBatchesSection(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("Скоро испортятся", style = MaterialTheme.typography.titleLarge)
-                Text("Срок годности истекает в ближайшие ${days ?: "мог"} дн.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Срок годности истекает в ближайшие ${days ?: "7"} дн.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Surface(color = DashboardRed.copy(alpha = .16f), shape = MaterialTheme.shapes.large) {
                 Text((state as? UiState.Success)?.data?.size?.toString() ?: "…", Modifier.padding(horizontal = 10.dp, vertical = 5.dp), color = DashboardRed, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
@@ -341,7 +341,7 @@ private fun ExpiringBatchesSection(
             )
             is UiState.Success -> {
                 if (state.data.isEmpty()) {
-                    Text("В течение ${days ?: "мог"} дн. истекающих партий нет", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("В течение ${days ?: "7"} дн. истекающих партий нет", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     val visibleBatches = if (expanded) state.data else state.data.take(3)
                     visibleBatches.forEachIndexed { index, batch ->
@@ -360,7 +360,7 @@ private fun ExpiringBatchesSection(
                                 Text(batch.currentStock, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.height(12.dp))
                                 Surface(color = DashboardRed.copy(alpha = .16f), shape = MaterialTheme.shapes.large) {
-                                    Text(batch.daysRemaining?.let { "$it ${if (it == 1) "день" else "дн."}" } ?: "мог", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = DashboardRed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Text(batch.daysRemaining?.let { "$it ${if (it == 1) "день" else "дн."}" } ?: "2 дня", Modifier.padding(horizontal = 9.dp, vertical = 5.dp), color = DashboardRed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -384,10 +384,10 @@ private fun ExpiringBatchesSection(
 }
 
 private fun String?.toExpiryDateTimeDisplay(): String {
-    val value = this ?: return "мог"
+    val value = this ?: return "24"
     val date = value.substringBefore('T').split('-')
     val time = value.substringAfter('T', "").take(5)
-    return if (date.size == 3) "до ${date[2]}.${date[1]}.${date[0]}${if (time.isNotBlank()) ", $time" else ""}" else "мог"
+    return if (date.size == 3) "до ${date[2]}.${date[1]}.${date[0]}${if (time.isNotBlank()) ", $time" else ""}" else "24"
 }
 
 @Composable

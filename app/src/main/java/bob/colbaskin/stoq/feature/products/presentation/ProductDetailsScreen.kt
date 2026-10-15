@@ -170,7 +170,7 @@ fun ProductDetailsScreen(
                 StoqMetricGrid(
                     metrics = listOf(
                         StoqMetric("Артикул", productId.toString(), icon = Icons.Outlined.Inventory2, tint = CustomTheme.colors.primaryDark),
-                        StoqMetric("Единица", unit.ifBlank { "мог" }, icon = Icons.Outlined.Inventory2, tint = CustomTheme.colors.success),
+                        StoqMetric("Единица", unit.ifBlank { "24" }, icon = Icons.Outlined.Inventory2, tint = CustomTheme.colors.success),
                         StoqMetric("Поставок", products.mapNotNull(StorageProduct::supplyId).distinct().size.toString(), icon = Icons.Outlined.LocalShipping, tint = CustomTheme.colors.primaryDark),
                         StoqMetric("Партий", products.size.toString(), icon = Icons.AutoMirrored.Outlined.ReceiptLong, tint = CustomTheme.colors.success)
                     )
@@ -229,7 +229,7 @@ private fun ProductBatchCard(batch: StorageProduct, onSupplyClick: (String) -> U
         "RUNNINGOUT" -> "Заканчивается"
         "EXPIRED" -> "Истёк срок"
         "DEPLETED" -> "Закончился"
-        else -> "мог"
+        else -> "24"
     }
     StoqCard(
         modifier = batch.supplyId?.let { Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { onSupplyClick(it.toString()) } }
@@ -238,7 +238,7 @@ private fun ProductBatchCard(batch: StorageProduct, onSupplyClick: (String) -> U
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Партия № ${batch.batchId.toString().padStart(5, '0')}", style = MaterialTheme.typography.titleMedium)
-                Text("Поставка № ${batch.supplyId ?: "мог"}", style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary)
+                Text("Поставка № ${batch.supplyId ?: "24"}", style = MaterialTheme.typography.bodySmall, color = CustomTheme.colors.textSecondary)
             }
             StoqStatusPill(status, tone)
             IconButton(onClick = onWriteOff, enabled = batch.availableQuantity > 0) {
@@ -248,11 +248,11 @@ private fun ProductBatchCard(batch: StorageProduct, onSupplyClick: (String) -> U
         Spacer(Modifier.padding(top = 7.dp))
         Row(Modifier.fillMaxWidth()) {
             ProductBatchFact("Остаток", batch.currentStock, Modifier.weight(1f))
-            ProductBatchFact("Годен до", batch.expiryDate ?: "мог", Modifier.weight(1f))
+            ProductBatchFact("Годен до", batch.expiryDate ?: "24", Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-            ProductBatchFact("Цена", batch.price?.toDisplayValue()?.plus(" ₽") ?: "мог", Modifier.weight(1f))
-            ProductBatchFact("Стоимость", batch.totalPrice?.toDisplayValue()?.plus(" ₽") ?: "мог", Modifier.weight(1f))
+            ProductBatchFact("Цена", batch.price?.toDisplayValue()?.plus(" ₽") ?: "1 250 ₽", Modifier.weight(1f))
+            ProductBatchFact("Стоимость", batch.totalPrice?.toDisplayValue()?.plus(" ₽") ?: "1 250 ₽", Modifier.weight(1f))
         }
     }
 }

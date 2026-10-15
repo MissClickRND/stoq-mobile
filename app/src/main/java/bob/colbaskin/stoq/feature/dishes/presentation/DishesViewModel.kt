@@ -174,8 +174,8 @@ class DishesViewModel @Inject constructor(
         if (recommended) loadRecommendations() else loadStopList()
     }
 
-    fun stopListReason(dishId: String): String = stopList.firstOrNull { it.dishId == dishId }?.reason ?: "мог"
-    fun stopListReasonTitle(dishId: String): String = stopList.firstOrNull { it.dishId == dishId }?.reasonTitle ?: "мог"
+    fun stopListReason(dishId: String): String = stopList.firstOrNull { it.dishId == dishId }?.reason ?: "24"
+    fun stopListReasonTitle(dishId: String): String = stopList.firstOrNull { it.dishId == dishId }?.reasonTitle ?: "24"
 
     private fun rebuildStopListDishes() {
         val dishesById = allDishes.associateBy(Dish::id)
@@ -209,8 +209,8 @@ class DishesViewModel @Inject constructor(
             ) ?: Dish(
                 id = recommendation.dishId,
                 name = recommendation.name ?: "Блюдо #${recommendation.dishId}",
-                description = "мог",
-                category = "мог",
+                description = "24",
+                category = "24",
                 price = recommendation.salePrice?.toInt() ?: -1,
                 cost = recommendation.costPrice?.toInt() ?: -1,
                 imageUrl = "",

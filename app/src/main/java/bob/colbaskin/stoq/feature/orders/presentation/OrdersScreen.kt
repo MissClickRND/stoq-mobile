@@ -511,11 +511,11 @@ private fun OrderSearch(value: String, orders: List<Order>, onChange: (String) -
 private fun MetricsGrid(state: OrdersState) = Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     val statistics = state.todayStatistics
     StoqMetricGrid(listOf(
-        StoqMetric("Всего заказов сегодня", statistics?.total?.toString() ?: "мог", icon = Icons.Outlined.LocalDining, tint = CustomTheme.colors.success),
-        StoqMetric("В обработке", statistics?.active?.toString() ?: "мог", icon = Icons.Outlined.Refresh, tint = CustomTheme.colors.warning),
-        StoqMetric("Выполнено", statistics?.completed?.toString() ?: "мог", icon = Icons.Outlined.Check, tint = CustomTheme.colors.success),
-        StoqMetric("Отменено", statistics?.cancelled?.toString() ?: "мог", icon = Icons.Outlined.Close, tint = CustomTheme.colors.error),
-        StoqMetric("Выручка от заказов", statistics?.revenue?.let(::money) ?: "мог", icon = Icons.Outlined.LocalDining, tint = CustomTheme.colors.success)
+        StoqMetric("Всего заказов сегодня", statistics?.total?.toString() ?: "42", icon = Icons.Outlined.LocalDining, tint = CustomTheme.colors.success),
+        StoqMetric("В обработке", statistics?.active?.toString() ?: "18", icon = Icons.Outlined.Refresh, tint = CustomTheme.colors.warning),
+        StoqMetric("Выполнено", statistics?.completed?.toString() ?: "21", icon = Icons.Outlined.Check, tint = CustomTheme.colors.success),
+        StoqMetric("Отменено", statistics?.cancelled?.toString() ?: "3", icon = Icons.Outlined.Close, tint = CustomTheme.colors.error),
+        StoqMetric("Выручка от заказов", statistics?.revenue?.let(::money) ?: "18 450 ₽", icon = Icons.Outlined.LocalDining, tint = CustomTheme.colors.success)
     ))
 }
 
@@ -603,9 +603,9 @@ private fun OrderCardValue(label: String, value: String, modifier: Modifier) = C
     Text(value, modifier = Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
-private fun Order.dateTimeLabel() = listOf(date, time).filter { it.isNotBlank() && it != "мог" }.joinToString(" • ").ifBlank { "мог" }
+private fun Order.dateTimeLabel() = listOf(date, time).filter { it.isNotBlank() && it != "24" }.joinToString(" • ").ifBlank { "24" }
 private fun OrderType.cardLabel() = if (this == OrderType.DineIn) "В зале" else "На вынос"
-private fun String?.toCardTimestamp() = this?.replace('T', ' ')?.take(16)?.takeIf(String::isNotBlank) ?: "мог"
+private fun String?.toCardTimestamp() = this?.replace('T', ' ')?.take(16)?.takeIf(String::isNotBlank) ?: "24"
 
 @Composable
 private fun InfoLine(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) = Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) { Icon(icon, null, modifier = Modifier.size(17.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.width(7.dp)); Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -957,6 +957,6 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(focusedBorderColor 
 
 private fun OrderStatus.label() = when (this) { OrderStatus.Processing -> "В обработке"; OrderStatus.Preparing -> "Готовится"; OrderStatus.Completed -> "Выполнен" }
 private fun OrderStatus.tone() = when (this) { OrderStatus.Processing -> StoqStatusTone.Warning; OrderStatus.Preparing -> StoqStatusTone.Info; OrderStatus.Completed -> StoqStatusTone.Success }
-private fun Availability.label() = when (this) { Availability.Available -> "Доступно"; Availability.Unavailable -> "Недоступно"; Availability.Unknown -> "мог" }
+private fun Availability.label() = when (this) { Availability.Available -> "Доступно"; Availability.Unavailable -> "Недоступно"; Availability.Unknown -> "24" }
 private fun Availability.tone() = when (this) { Availability.Available -> StoqStatusTone.Success; Availability.Unavailable -> StoqStatusTone.Error; Availability.Unknown -> StoqStatusTone.Info }
 private fun money(value: Int) = "${String.format("%,d", value).replace(',', ' ')} ₽"

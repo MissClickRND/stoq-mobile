@@ -155,7 +155,7 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
 
 @Composable private fun CollectionSearch(value: String, onChange: (String) -> Unit) { val c = LocalColors.current; OutlinedTextField(value, onChange, Modifier.fillMaxWidth(), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Поиск блюд, ингредиентов или причин…", maxLines = 1) }, shape = MaterialTheme.shapes.medium, colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = c.surface, unfocusedContainerColor = c.surface, focusedBorderColor = c.primaryDark, unfocusedBorderColor = c.outline)) }
 
-@Composable private fun CollectionKpis(recommended: Boolean, total: Int) { val c = LocalColors.current; val metrics = if (recommended) listOf(Metric("Всего рекомендуемых блюд", total.toString(), "", Icons.Outlined.Sell, c.success), Metric("Потенциально спасти продуктов", "мог", "", Icons.Outlined.Inventory2, c.success), Metric("Средняя наценка", "мог", "", Icons.Outlined.BarChart, c.success), Metric("Срочных блюд сегодня", "мог", "", Icons.Outlined.AccessTime, c.error)) else listOf(Metric("Всего в стоп-листе", total.toString(), "", Icons.Outlined.WarningAmber, c.error), Metric("Нет ингредиентов", "мог", "", Icons.Outlined.Inventory2, c.warning), Metric("Заблокированы из-за сроков", "мог", "", Icons.Outlined.AccessTime, c.textSecondary), Metric("Потенциальная выручка", "мог", "", Icons.Outlined.BarChart, c.success)); StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint) }) }
+@Composable private fun CollectionKpis(recommended: Boolean, total: Int) { val c = LocalColors.current; val metrics = if (recommended) listOf(Metric("Всего рекомендуемых блюд", total.toString(), "", Icons.Outlined.Sell, c.success), Metric("Потенциально спасти продуктов", "185%", "", Icons.Outlined.Inventory2, c.success), Metric("Средняя наценка", "185%", "", Icons.Outlined.BarChart, c.success), Metric("Срочных блюд сегодня", "185%", "", Icons.Outlined.AccessTime, c.error)) else listOf(Metric("Всего в стоп-листе", total.toString(), "", Icons.Outlined.WarningAmber, c.error), Metric("Нет ингредиентов", "185%", "", Icons.Outlined.Inventory2, c.warning), Metric("Заблокированы из-за сроков", "185%", "", Icons.Outlined.AccessTime, c.textSecondary), Metric("Потенциальная выручка", "185%", "", Icons.Outlined.BarChart, c.success)); StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint) }) }
 
 @Composable private fun CollectionFilters(recommended: Boolean, first: String, category: String, delivery: String, markup: String, rating: String, onFirst: (String) -> Unit, onCategory: (String) -> Unit, onDelivery: (String) -> Unit, onMarkup: (String) -> Unit, onRating: (String) -> Unit, onCustomDate: () -> Unit, onReset: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -207,21 +207,21 @@ fun DishCollectionScreen(recommended: Boolean, onBack: () -> Unit, onDishClick: 
             HorizontalDivider(Modifier.padding(vertical = 10.dp), color = c.outline.copy(alpha = .5f))
             if (recommended) {
                 Row(Modifier.fillMaxWidth()) {
-                    Fact("Наценка", dish.markup.takeIf { it >= 0 }?.let { "$it%" } ?: "мог", c.success, Modifier.weight(1f))
+                    Fact("Наценка", dish.markup.takeIf { it >= 0 }?.let { "$it%" } ?: "185%", c.success, Modifier.weight(1f))
                     VerticalDivider(Modifier.height(44.dp), color = c.outline.copy(alpha = .5f))
-                    Fact("Ингредиенты", if (dish.recipeLoaded) dish.ingredients.size.toString() else "мог", c.textPrimary, Modifier.weight(1f).padding(start = 10.dp))
+                    Fact("Ингредиенты", if (dish.recipeLoaded) dish.ingredients.size.toString() else "5", c.textPrimary, Modifier.weight(1f).padding(start = 10.dp))
                     VerticalDivider(Modifier.height(44.dp), color = c.outline.copy(alpha = .5f))
-                    Fact("Причина", recommendation?.expiringProducts?.takeIf { it.isNotEmpty() }?.joinToString() ?: "мог", c.textPrimary, Modifier.weight(1.25f).padding(start = 10.dp))
+                    Fact("Причина", recommendation?.expiringProducts?.takeIf { it.isNotEmpty() }?.joinToString() ?: "24", c.textPrimary, Modifier.weight(1.25f).padding(start = 10.dp))
                 }
                 Spacer(Modifier.height(10.dp))
-                Surface(Modifier.fillMaxWidth(), color = c.error.copy(alpha = .10f), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Alarm, null, Modifier.size(19.dp), c.error); Spacer(Modifier.width(8.dp)); Text(recommendation?.expiringProducts?.takeIf { it.isNotEmpty() }?.let { "Заканчиваются: ${it.joinToString()}" } ?: "мог", style = MaterialTheme.typography.labelMedium, color = c.error, fontWeight = FontWeight.Bold) } }
+                Surface(Modifier.fillMaxWidth(), color = c.error.copy(alpha = .10f), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.Alarm, null, Modifier.size(19.dp), c.error); Spacer(Modifier.width(8.dp)); Text(recommendation?.expiringProducts?.takeIf { it.isNotEmpty() }?.let { "Заканчиваются: ${it.joinToString()}" } ?: "24", style = MaterialTheme.typography.labelMedium, color = c.error, fontWeight = FontWeight.Bold) } }
             } else {
                 Row(Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
                         Text(stopListReasonTitle, style = MaterialTheme.typography.bodySmall, color = c.error, fontWeight = FontWeight.Bold, maxLines = 1)
                         Text(stopListReason, modifier = Modifier.padding(top = 3.dp), style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 2)
                     }
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { Text("Ожидаем поставку", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1); Text("мог", style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1) }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) { Text("Ожидаем поставку", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, fontWeight = FontWeight.SemiBold, maxLines = 1); Text("24", style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1) }
                 }
             }
         }

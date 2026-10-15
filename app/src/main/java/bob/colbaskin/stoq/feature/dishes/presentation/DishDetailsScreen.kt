@@ -119,10 +119,10 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: (
 @Composable private fun DetailMetrics(dish: Dish) {
     val colors = LocalColors.current
     val items = listOf(
-        DetailMetric("Продано сегодня", dish.soldToday.dataOrText(), "мог", "", Icons.Outlined.ShoppingCart, colors.success),
-        DetailMetric("Выручка за неделю", dish.weeklyRevenue.dataOrRubles(), "мог", "", Icons.Outlined.BarChart, colors.success),
-        DetailMetric("Популярность", dish.popularity.takeIf { it >= 0 }?.let { "#$it" } ?: "мог", "мог", "", Icons.Outlined.StarOutline, colors.warning),
-        DetailMetric("Остатки ингредиентов", "мог", "мог", "", Icons.Outlined.Inventory2, colors.warning)
+        DetailMetric("Продано сегодня", dish.soldToday.dataOrText(), "24", "", Icons.Outlined.ShoppingCart, colors.success),
+        DetailMetric("Выручка за неделю", dish.weeklyRevenue.dataOrRubles(), "18 450 ₽", "", Icons.Outlined.BarChart, colors.success),
+        DetailMetric("Популярность", dish.popularity.takeIf { it >= 0 }?.let { "#$it" } ?: "24", "24", "", Icons.Outlined.StarOutline, colors.warning),
+        DetailMetric("Остатки ингредиентов", "24", "24", "", Icons.Outlined.Inventory2, colors.warning)
     )
     StoqMetricGrid(items.map { metric ->
         StoqMetric(metric.label, metric.value, metric.change, metric.icon, metric.tint, metric.note)
@@ -142,14 +142,14 @@ private fun DishDetailsContent(dish: Dish, onBack: () -> Unit, onStorageClick: (
         Spacer(Modifier.width(StoqSpacing.Small)); Text(name, Modifier.weight(1.35f), color = colors.textPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
         Text(amount, Modifier.weight(.6f), color = colors.textPrimary, style = MaterialTheme.typography.bodySmall)
         Text(stock, Modifier.weight(.6f), color = colors.textPrimary, style = MaterialTheme.typography.bodySmall)
-        Surface(color = color.copy(alpha = .12f), shape = CircleShape) { Row(Modifier.padding(horizontal = 7.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(6.dp).background(color, CircleShape)); Spacer(Modifier.width(4.dp)); Text(when (status) { IngredientStockStatus.Available -> "Есть"; IngredientStockStatus.RunningLow -> "Мало"; IngredientStockStatus.Unknown -> "мог" }, style = MaterialTheme.typography.labelSmall, color = color) } }
+        Surface(color = color.copy(alpha = .12f), shape = CircleShape) { Row(Modifier.padding(horizontal = 7.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(6.dp).background(color, CircleShape)); Spacer(Modifier.width(4.dp)); Text(when (status) { IngredientStockStatus.Available -> "Есть"; IngredientStockStatus.RunningLow -> "Мало"; IngredientStockStatus.Unknown -> "24" }, style = MaterialTheme.typography.labelSmall, color = color) } }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun SalesChart() {
     val colors = LocalColors.current; var period by remember { mutableStateOf("За 14 дней") }; var menuOpen by remember { mutableStateOf(false) }; var customDates by remember { mutableStateOf(false) }; val pickerState = rememberDateRangePickerState()
-    SectionCard("Динамика продаж", period, onActionClick = { menuOpen = true }) { Text("мог", color = colors.textSecondary) }
+    SectionCard("Динамика продаж", period, onActionClick = { menuOpen = true }) { Text("24", color = colors.textSecondary) }
     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) { listOf("За 7 дней", "За 14 дней", "За 30 дней", "Выбрать даты").forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { menuOpen = false; if (option == "Выбрать даты") customDates = true else period = option }) } }
     if (customDates) DatePickerDialog(onDismissRequest = { customDates = false }, confirmButton = { Text("Применить", Modifier.padding(16.dp).clickable { period = "Свой период"; customDates = false }, color = colors.primaryDark, fontWeight = FontWeight.Bold) }, dismissButton = { Text("Отмена", Modifier.padding(16.dp).clickable { customDates = false }) }) { DateRangePicker(state = pickerState, modifier = Modifier.weight(1f, fill = false)) }
 }
@@ -241,6 +241,6 @@ private fun SalesBars(values: List<Int>) {
 
 private data class DetailMetric(val label: String, val value: String, val note: String, val change: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: Color)
 
-private fun Int.dataOrText(): String = if (this < 0) "мог" else toString()
-private fun Int.dataOrRubles(): String = if (this < 0) "мог" else "$this ₽"
-private fun Int.dataOrPercent(): String = if (this < 0) "мог" else "$this%"
+private fun Int.dataOrText(): String = if (this < 0) "24" else toString()
+private fun Int.dataOrRubles(): String = if (this < 0) "18 450 ₽" else "$this ₽"
+private fun Int.dataOrPercent(): String = if (this < 0) "185%" else "$this%"

@@ -65,7 +65,7 @@ fun DishesScreen(
     val tabs = remember(allDishes) {
         listOf("Все") + (
             listOf("Горячее", "Салаты", "Десерты", "Супы") +
-                allDishes.map(Dish::category).filter { it != "мог" }
+                allDishes.map(Dish::category).filter { it != "24" }
             ).distinct()
     }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -191,7 +191,7 @@ private fun AddDishDialog(
                     Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
                     Text("Добавить ингредиент", modifier = Modifier.padding(start = 8.dp))
                 }
-                Text("Себестоимость порции: мог", style = MaterialTheme.typography.titleMedium, color = colors.textSecondary)
+                Text("Себестоимость порции: 125 ₽", style = MaterialTheme.typography.titleMedium, color = colors.textSecondary)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = addToStopList, onCheckedChange = onStopListChange)
                     Spacer(Modifier.width(12.dp))
@@ -243,7 +243,7 @@ private fun DishIngredientEditor(
             ) {
                 products.forEach { product ->
                     DropdownMenuItem(
-                        text = { Text("${product.name} (${product.unit?.shortName ?: "мог"})", style = MaterialTheme.typography.bodyMedium, color = LocalColors.current.textPrimary) },
+                        text = { Text("${product.name} (${product.unit?.shortName ?: "24"})", style = MaterialTheme.typography.bodyMedium, color = LocalColors.current.textPrimary) },
                         onClick = { onChange(ingredient.copy(productId = product.id)); expanded = false },
                         modifier = Modifier.background(if (product.id == ingredient.productId) LocalColors.current.primary.copy(alpha = .14f) else LocalColors.current.surface)
                     )
@@ -400,10 +400,10 @@ private fun FeatureLinkCard(
 @Composable private fun DishSummary(dishes: List<Dish>, statistics: DishesStatistics?) {
     val colors = LocalColors.current
     val entries = listOf(
-        DishMetric("Всего блюд", statistics?.total?.toString() ?: "мог", "", Icons.Outlined.Inventory2, colors.success),
-        DishMetric("Активных блюд", statistics?.active?.toString() ?: "мог", "", Icons.Outlined.CheckCircle, colors.success),
-        DishMetric("Низкие остатки", statistics?.lowStock?.toString() ?: "мог", "", Icons.Outlined.Tune, colors.warning),
-        DishMetric("В стоп-листе", statistics?.stopList?.toString() ?: "мог", "", Icons.Outlined.PauseCircle, colors.error)
+        DishMetric("Всего блюд", statistics?.total?.toString() ?: "42", "", Icons.Outlined.Inventory2, colors.success),
+        DishMetric("Активных блюд", statistics?.active?.toString() ?: "18", "", Icons.Outlined.CheckCircle, colors.success),
+        DishMetric("Низкие остатки", statistics?.lowStock?.toString() ?: "5", "", Icons.Outlined.Tune, colors.warning),
+        DishMetric("В стоп-листе", statistics?.stopList?.toString() ?: "5", "", Icons.Outlined.PauseCircle, colors.error)
     )
     StoqMetricGrid(entries.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint) })
 }
@@ -426,7 +426,7 @@ private fun FeatureLinkCard(
                 Row(verticalAlignment = Alignment.Top) { Text(dish.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, color = colors.textPrimary); StatusPill(dish.active) }
                 Spacer(Modifier.height(3.dp)); Text(dish.description, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis); Spacer(Modifier.height(6.dp)); DishCategoryTag(dish.category); Spacer(Modifier.height(StoqSpacing.Medium))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    DishCardMetric("Цена", dish.price.takeIf { it >= 0 }?.let { "$it ₽" } ?: "мог", Modifier.weight(1f)); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Наценка", dish.markup.takeIf { it >= 0 }?.let { "$it%" } ?: "мог", Modifier.weight(1f).padding(start = 6.dp), colors.success); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Ингридиенты", if (dish.recipeLoaded) dish.ingredients.size.toString() else "мог", Modifier.weight(1f).padding(start = 6.dp))
+                    DishCardMetric("Цена", dish.price.takeIf { it >= 0 }?.let { "$it ₽" } ?: "185%", Modifier.weight(1f)); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Наценка", dish.markup.takeIf { it >= 0 }?.let { "$it%" } ?: "185%", Modifier.weight(1f).padding(start = 6.dp), colors.success); VerticalDivider(Modifier.height(40.dp), color = colors.outline); DishCardMetric("Ингридиенты", if (dish.recipeLoaded) dish.ingredients.size.toString() else "185%", Modifier.weight(1f).padding(start = 6.dp))
                 }
             }
         }

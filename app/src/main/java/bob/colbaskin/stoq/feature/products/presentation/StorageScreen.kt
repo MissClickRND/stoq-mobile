@@ -366,10 +366,10 @@ private fun ProductSearchSuggestions(products: List<Product>, onSelected: (Produ
 private fun ProductMetrics(products: List<Product>) {
     val colors = CustomTheme.colors
     val metrics = listOf(
-        StorageMetric("Всего продуктов", products.size.toString(), "мог", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
-        StorageMetric("С низким остатком", "мог", "мог", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
-        StorageMetric("Скоро истекут", products.count { it.expiry != "мог" }.toString(), "мог", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
-        StorageMetric("Поставщиков", "мог", "мог", "активных поставщиков", Icons.Outlined.Group, colors.success)
+        StorageMetric("Всего продуктов", products.size.toString(), "24", "по сравнению с прошлым месяцем", Icons.Outlined.Inventory2, colors.success),
+        StorageMetric("С низким остатком", "24", "24", "требуют пополнения", Icons.Outlined.WarningAmber, colors.error),
+        StorageMetric("Скоро истекут", products.count { it.expiry != "24" }.toString(), "24", "в течение 7 дней", Icons.Outlined.AccessTime, colors.warning),
+        StorageMetric("Поставщиков", "24", "24", "активных поставщиков", Icons.Outlined.Group, colors.success)
     )
     StoqMetricGrid(metrics.map { StoqMetric(it.label, it.value, it.change, it.icon, it.tint, it.supportingText) })
 }
@@ -450,12 +450,12 @@ private fun StorageProduct.toProduct() = Product(
     supplyId = supplyId,
     name = name,
     article = id.toString(),
-    category = "мог",
-    currentStock = currentStock.ifBlank { "мог" },
-    minimumStock = "мог",
-    suppliers = "мог",
-    expiry = expiryDate ?: "мог",
-    expiryDate = expiresAt ?: expiryDate ?: "мог",
+    category = "24",
+    currentStock = currentStock.ifBlank { "24" },
+    minimumStock = "24",
+    suppliers = "24",
+    expiry = expiryDate ?: "24",
+    expiryDate = expiresAt ?: expiryDate ?: "24",
     price = price,
     totalPrice = totalPrice,
     status = status.toProductStatus()
@@ -474,7 +474,7 @@ private fun ProductStatus.infoTitle() = when (this) {
     ProductStatus.Depleted -> "Закончился"
     ProductStatus.Expired -> "Истёк срок"
     ProductStatus.RunningOut -> "Заканчивается"
-    ProductStatus.Unknown -> "мог"
+    ProductStatus.Unknown -> "24"
 }
 
 @Composable
@@ -497,7 +497,7 @@ private fun StatusPill(status: ProductStatus) {
         ProductStatus.Depleted -> "●  Закончился" to CustomTheme.colors.error
         ProductStatus.Expired -> "●  Истёк срок" to CustomTheme.colors.error
         ProductStatus.RunningOut -> "●  Заканчивается" to CustomTheme.colors.warning
-        ProductStatus.Unknown -> "●  мог" to CustomTheme.colors.textSecondary
+        ProductStatus.Unknown -> "●  24" to CustomTheme.colors.textSecondary
     }
     Surface(color = color.copy(alpha = .10f), shape = androidx.compose.material3.MaterialTheme.shapes.medium) {
         Text(label, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)

@@ -88,6 +88,6 @@ private fun StopListDishDto.toStopListDish(): StopListDish {
     return StopListDish(
         dishId = dishId.toString(),
         reasonTitle = if (statuses.any { it.contains("EXPIRED") }) "Истёк срок годности" else "Нет ингредиентов",
-        reason = reasons.mapNotNull { it.name }.takeIf(List<String>::isNotEmpty)?.joinToString(", ") ?: "мог"
+        reason = reasons.mapNotNull { it.name }.takeIf(List<String>::isNotEmpty)?.joinToString(", ") ?: "24"
     )
 }

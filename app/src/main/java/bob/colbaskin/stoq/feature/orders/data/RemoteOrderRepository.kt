@@ -104,7 +104,7 @@ class RemoteOrderRepository @Inject constructor(
 }
 
 private fun DishDto.toOrderItem() = OrderItem(
-    dishId = id.toString(), name = name, category = "мог", price = salePrice?.toInt() ?: 0,
+    dishId = id.toString(), name = name, category = "24", price = salePrice?.toInt() ?: 0,
     imageUrl = imageURL.orEmpty(), quantity = 1,
     availability = when (availablePortions) {
         null -> Availability.Unknown
@@ -116,12 +116,12 @@ private fun DishDto.toOrderItem() = OrderItem(
 private fun OrderDto.toOrder(dishes: Map<Long, DishDto>): Order {
     val dateTime = (date ?: createdAt).orEmpty().replace('T', ' ').take(16)
     return Order(
-        id = id.toString(), date = dateTime.take(10).ifBlank { "мог" }, time = dateTime.drop(11).ifBlank { "мог" },
+        id = id.toString(), date = dateTime.take(10).ifBlank { "24" }, time = dateTime.drop(11).ifBlank { "24" },
         status = when (status.lowercase()) { "completed", "done" -> OrderStatus.Completed; "preparing" -> OrderStatus.Preparing; else -> OrderStatus.Processing },
         type = when (type?.lowercase()) { "takeaway", "delivery" -> OrderType.Delivery; else -> OrderType.DineIn },
-        location = table?.let { "Стол $it" } ?: "мог", customer = "мог", table = table, guests = guests,
+        location = table?.let { "Стол $it" } ?: "24", customer = "24", table = table, guests = guests,
         createdAt = createdAt, updatedAt = updatedAt,
         items = items.map { item -> dishes[item.dishId]?.toOrderItem()?.copy(quantity = item.quantity)
-            ?: OrderItem(item.dishId.toString(), "Блюдо #${item.dishId}", "мог", 0, "", item.quantity, Availability.Unknown) }
+            ?: OrderItem(item.dishId.toString(), "Блюдо #${item.dishId}", "24", 0, "", item.quantity, Availability.Unknown) }
     )
 }
