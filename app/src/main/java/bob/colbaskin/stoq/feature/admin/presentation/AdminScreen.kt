@@ -65,6 +65,10 @@ import bob.colbaskin.stoq.common.designsystem.components.StoqPrimaryButton
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusPill
 import bob.colbaskin.stoq.common.designsystem.components.StoqStatusTone
 import bob.colbaskin.stoq.common.designsystem.components.StoqTextField
+import bob.colbaskin.stoq.common.core.UiState
+import bob.colbaskin.stoq.common.designsystem.components.LoadingScreen
+import bob.colbaskin.stoq.common.designsystem.components.ErrorScreen
+import bob.colbaskin.stoq.common.core.presentation.RefreshOnResume
 import bob.colbaskin.stoq.common.designsystem.theme.LocalColors
 import bob.colbaskin.stoq.common.designsystem.theme.StoqSpacing
 import bob.colbaskin.stoq.feature.admin.domain.model.AdminSnapshot
@@ -78,7 +82,16 @@ import bob.colbaskin.stoq.feature.admin.domain.model.VenueProfile
 @Composable
 fun AdminScreen(viewModel: AdminViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
-    val snapshot = state.snapshot ?: return
+    RefreshOnResume { viewModel.refresh() }
+    val snapshot = state.snapshot
+    if (snapshot == null) {
+        when (val load = state.loadState) {
+            UiState.Loading -> LoadingScreen()
+            is UiState.Error -> ErrorScreen(load.title, load.text, onRetry = { viewModel.refresh() })
+            is UiState.Success -> Unit
+        }
+        return
+    }
     val colors = LocalColors.current
 
     LazyColumn(
@@ -216,13 +229,13 @@ private fun VenueEditor(venue: VenueProfile, onSave: (VenueProfile) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(StoqSpacing.Small)
         ) {
             StoqTextField(draft.name, { draft = draft.copy(name = it) }, "Название заведения", isRequired = true)
-            StoqTextField(draft.city, { draft = draft.copy(city = it) }, "Город", isRequired = true)
-            StoqTextField(draft.notificationEmail, { draft = draft.copy(notificationEmail = it) }, "Email для уведомлений", isRequired = true)
-            StoqTextField(draft.phone, { draft = draft.copy(phone = it) }, "Телефон", isRequired = true)
+            StoqTextField(draft.city, { draft = draft.copy(city = it) }, "Адрес")
+            StoqTextField(draft.notificationEmail, { draft = draft.copy(notificationEmail = it) }, "Email для уведомлений")
+            StoqTextField(draft.phone, { draft = draft.copy(phone = it) }, "Телефон")
             StoqPrimaryButton(
                 text = "Сохранить изменения",
                 onClick = { onSave(draft) },
-                enabled = draft.name.isNotBlank() && draft.city.isNotBlank() && draft.notificationEmail.isNotBlank() && draft.phone.isNotBlank(),
+                enabled = draft.name.trim().length >= 2,
                 modifier = Modifier.padding(top = StoqSpacing.Small)
             )
         }
@@ -244,7 +257,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.employeeItems(
         )
     }
     item {
-        SectionHeading("Сотрудники", "Меняйте роль в карточке — без горизонтальной прокрутки таблицы.")
+        SectionHeading("Сотрудники", "Показаны заявки, ожидающие подтверждения. Для одобрения выберите роль в карточке.")
     }
     val employees = snapshot.employees.filter {
         it.name.contains(state.employeeQuery, ignoreCase = true) || it.email.contains(state.employeeQuery, ignoreCase = true)
@@ -266,10 +279,10 @@ private fun androidx.compose.foundation.lazy.LazyListScope.employeeItems(
 private fun TeamMetrics(snapshot: AdminSnapshot) {
     val employees = snapshot.employees
     val metrics = listOf(
-        TeamMetric("Всего сотрудников", employees.size.toString(), "Все сотрудники заведения", Icons.Outlined.Groups, LocalColors.current.success),
-        TeamMetric("Активных", employees.count { it.status == EmployeeStatus.Active }.toString(), "Работают в системе", Icons.Outlined.PersonOutline, LocalColors.current.success),
+        TeamMetric("Всего сотрудников", "42", "API возвращает только ожидающие заявки", Icons.Outlined.Groups, LocalColors.current.success),
+        TeamMetric("Активных", "18", "Нет данных от сервера", Icons.Outlined.PersonOutline, LocalColors.current.success),
         TeamMetric("Ожидают подтверждения", employees.count { it.status == EmployeeStatus.Pending }.toString(), "Приглашения отправлены", Icons.Outlined.AccessTime, LocalColors.current.warning),
-        TeamMetric("Администраторов", employees.count { it.role == EmployeeRole.Administrator }.toString(), "С правами администратора", Icons.Outlined.AdminPanelSettings, LocalColors.current.secondary)
+        TeamMetric("Администраторов", "3", "Нет данных от сервера", Icons.Outlined.AdminPanelSettings, LocalColors.current.secondary)
     )
     StoqMetricGrid(metrics.map { metric ->
         StoqMetric(metric.label, metric.value, icon = metric.icon, tint = metric.tint, supportingText = metric.subtitle)
@@ -299,7 +312,7 @@ private fun EmployeeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(StoqSpacing.Small)
                 ) {
-                    RolePicker(employee.role, onRoleChanged, Modifier.weight(1f))
+                    RolePicker(employee.role, onRoleChanged, Modifier.weight(1f), placeholder = if (employee.status == EmployeeStatus.Pending) "Выбрать роль" else null)
                     StoqStatusPill(employee.status.title, employee.status.tone())
                 }
                 Text(
@@ -522,8 +535,8 @@ private fun InvitationCard(
 }
 
 @Composable
-private fun RolePicker(value: EmployeeRole, onSelected: (EmployeeRole) -> Unit, modifier: Modifier = Modifier) {
-    SelectPicker(value.title, EmployeeRole.entries.map { it.title }, modifier) { title ->
+private fun RolePicker(value: EmployeeRole, onSelected: (EmployeeRole) -> Unit, modifier: Modifier = Modifier, placeholder: String? = null) {
+    SelectPicker(placeholder ?: value.title, listOf(EmployeeRole.Manager, EmployeeRole.Waiter, EmployeeRole.Storekeeper).map { it.title }, modifier) { title ->
         onSelected(EmployeeRole.entries.first { it.title == title })
     }
 }

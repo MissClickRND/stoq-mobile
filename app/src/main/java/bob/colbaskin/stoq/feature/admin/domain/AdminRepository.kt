@@ -3,13 +3,11 @@ package bob.colbaskin.stoq.feature.admin.domain
 import bob.colbaskin.stoq.feature.admin.domain.model.AdminSnapshot
 import bob.colbaskin.stoq.feature.admin.domain.model.EmployeeRole
 import bob.colbaskin.stoq.feature.admin.domain.model.VenueProfile
+import bob.colbaskin.stoq.common.core.UiState
 
 interface AdminRepository {
-    fun snapshot(): AdminSnapshot
-    fun updateVenue(venue: VenueProfile): AdminSnapshot
-    fun updateEmployeeRole(employeeId: String, role: EmployeeRole): AdminSnapshot
-    fun deleteEmployee(employeeId: String): AdminSnapshot
-    fun createInvitation(role: EmployeeRole, durationHours: Int): AdminSnapshot
-    fun deactivateInvitation(invitationId: String): AdminSnapshot
-    fun deleteInvitation(invitationId: String): AdminSnapshot
+    suspend fun snapshot(): UiState<AdminSnapshot>
+    suspend fun updateVenue(venue: VenueProfile): UiState<AdminSnapshot>
+    suspend fun updateEmployeeRole(employeeId: String, role: EmployeeRole): UiState<AdminSnapshot>
+    suspend fun deleteEmployee(employeeId: String): UiState<AdminSnapshot>
 }

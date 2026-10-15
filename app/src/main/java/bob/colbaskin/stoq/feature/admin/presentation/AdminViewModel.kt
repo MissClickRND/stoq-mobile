@@ -7,6 +7,7 @@ import bob.colbaskin.stoq.feature.admin.domain.model.AdminSnapshot
 import bob.colbaskin.stoq.feature.admin.domain.model.EmployeeInvitation
 import bob.colbaskin.stoq.feature.admin.domain.model.EmployeeRole
 import bob.colbaskin.stoq.feature.admin.domain.model.VenueProfile
+import bob.colbaskin.stoq.common.core.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +24,8 @@ data class AdminState(
     val inviteRole: EmployeeRole = EmployeeRole.Manager,
     val inviteDurationHours: Int = 48,
     val generatedInvitation: EmployeeInvitation? = null,
-    val notice: String? = null
+    val notice: String? = null,
+    val loadState: UiState<Unit> = UiState.Loading
 )
 
 sealed interface AdminAction {
@@ -44,8 +46,15 @@ sealed interface AdminAction {
 class AdminViewModel @Inject constructor(
     private val repository: AdminRepository
 ) : ViewModel() {
-    private val _state = MutableStateFlow(AdminState(snapshot = repository.snapshot()))
+    private val _state = MutableStateFlow(AdminState())
     val state = _state.asStateFlow()
+
+    init { refresh() }
+
+    fun refresh() = viewModelScope.launch {
+        _state.update { it.copy(loadState = UiState.Loading) }
+        update(repository.snapshot(), null)
+    }
 
     fun onAction(action: AdminAction) = viewModelScope.launch {
         when (action) {
@@ -56,17 +65,18 @@ class AdminViewModel @Inject constructor(
             is AdminAction.EmployeeDeleted -> update(repository.deleteEmployee(action.employeeId), "Сотрудник удалён")
             is AdminAction.InviteRoleChanged -> _state.update { it.copy(inviteRole = action.value) }
             is AdminAction.InviteDurationChanged -> _state.update { it.copy(inviteDurationHours = action.hours) }
-            AdminAction.InviteCreated -> {
-                val snapshot = repository.createInvitation(state.value.inviteRole, state.value.inviteDurationHours)
-                _state.update { it.copy(snapshot = snapshot, generatedInvitation = snapshot.invitations.firstOrNull(), notice = null) }
-            }
-            is AdminAction.InvitationDeactivated -> update(repository.deactivateInvitation(action.invitationId), "Приглашение отключено")
-            is AdminAction.InvitationDeleted -> update(repository.deleteInvitation(action.invitationId), "Приглашение удалено")
+            AdminAction.InviteCreated -> Unit
+            is AdminAction.InvitationDeactivated -> Unit
+            is AdminAction.InvitationDeleted -> Unit
             AdminAction.NoticeShown -> _state.update { it.copy(notice = null) }
         }
     }
 
-    private fun update(snapshot: AdminSnapshot, notice: String) {
-        _state.update { it.copy(snapshot = snapshot, notice = notice) }
+    private fun update(result: UiState<AdminSnapshot>, notice: String?) {
+        when (result) {
+            is UiState.Success -> _state.update { it.copy(snapshot = result.data, notice = notice, loadState = UiState.Success(Unit)) }
+            is UiState.Error -> _state.update { it.copy(notice = result.text, loadState = if (it.snapshot == null) result else UiState.Success(Unit)) }
+            UiState.Loading -> Unit
+        }
     }
 }

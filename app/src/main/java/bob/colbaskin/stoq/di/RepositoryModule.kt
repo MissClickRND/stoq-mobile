@@ -6,7 +6,7 @@ import bob.colbaskin.stoq.common.userprefs.data.UserPreferencesRepositoryImpl
 import bob.colbaskin.stoq.common.userprefs.domain.UserPreferencesRepository
 import bob.colbaskin.stoq.feature.orders.data.RemoteOrderRepository
 import bob.colbaskin.stoq.feature.orders.domain.OrderRepository
-import bob.colbaskin.stoq.feature.admin.data.MockAdminRepository
+import bob.colbaskin.stoq.feature.admin.data.RemoteAdminRepository
 import bob.colbaskin.stoq.feature.admin.domain.AdminRepository
 import bob.colbaskin.stoq.feature.inventory.data.RemoteInventoryScreenRepository
 import bob.colbaskin.stoq.feature.inventory.domain.InventoryRepository
@@ -35,7 +35,7 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindAdminRepository(implementation: MockAdminRepository): AdminRepository
+    abstract fun bindAdminRepository(implementation: RemoteAdminRepository): AdminRepository
 
     @Binds
     @Singleton
