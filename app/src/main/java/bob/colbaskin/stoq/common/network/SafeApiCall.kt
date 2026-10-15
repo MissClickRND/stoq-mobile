@@ -3,6 +3,9 @@ package bob.colbaskin.stoq.common.network
 import bob.colbaskin.stoq.common.core.ApiResult
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -39,9 +42,19 @@ suspend inline fun <reified T, reified R> safeApiCall(
 @PublishedApi
 internal fun HttpException.serverMessage(): String? = runCatching {
     val body = response()?.errorBody()?.string().orEmpty()
-    Json.parseToJsonElement(body)
-        .jsonObject["message"]
-        ?.jsonPrimitive
-        ?.contentOrNull
-        ?.takeIf(String::isNotBlank)
+    val payload = Json.parseToJsonElement(body)
+    val message = (payload as? JsonObject)?.get("message")
+    val products = (payload as? JsonArray) ?: (message as? JsonArray)
+    val missingProducts = products?.mapNotNull { element ->
+        val product = element as? JsonObject ?: return@mapNotNull null
+        val name = (product["name"] as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank)
+            ?: return@mapNotNull null
+        val id = (product["productId"] as? JsonPrimitive)?.contentOrNull
+        "• $name${id?.let { " · ID $it" }.orEmpty()}"
+    }.orEmpty()
+    if (missingProducts.isNotEmpty()) {
+        "Недостаточно продуктов на складе:\n${missingProducts.joinToString("\n")}"
+    } else {
+        (message as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank)
+    }
 }.getOrNull()

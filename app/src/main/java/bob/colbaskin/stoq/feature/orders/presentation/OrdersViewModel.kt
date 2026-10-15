@@ -277,7 +277,6 @@ class OrdersViewModel @Inject constructor(
             }
             is UiState.Error -> {
                 _state.update { it.copy(isCreating = false, error = result.text) }
-                saveDraft()
             }
             UiState.Loading -> Unit
         }

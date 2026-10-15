@@ -875,13 +875,31 @@ private fun OrderSummary(state: OrdersState) = Surface(Modifier.fillMaxWidth(), 
 private fun SummaryValue(label: String, value: String) = Column { Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value, style = MaterialTheme.typography.titleLarge) }
 
 @Composable
-private fun ErrorBanner(title: String, text: String) = Surface(Modifier.fillMaxWidth().padding(top = 8.dp), color = CustomTheme.colors.error.copy(alpha = .11f), shape = MaterialTheme.shapes.small) { Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(28.dp).clip(CircleShape).background(CustomTheme.colors.error), contentAlignment = Alignment.Center) { Text("!", color = MaterialTheme.colorScheme.surface, style = MaterialTheme.typography.titleMedium) }; Spacer(Modifier.width(10.dp)); Text("$title: $text", style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.error, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+private fun ErrorBanner(title: String, text: String) = Surface(
+    Modifier.fillMaxWidth().padding(top = 8.dp),
+    color = CustomTheme.colors.error.copy(alpha = .11f),
+    shape = MaterialTheme.shapes.medium,
+    border = BorderStroke(1.dp, CustomTheme.colors.error.copy(alpha = .25f))
+) {
+    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(CustomTheme.colors.error), contentAlignment = Alignment.Center) {
+            Text("!", color = MaterialTheme.colorScheme.surface, style = MaterialTheme.typography.titleMedium)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = CustomTheme.colors.error)
+            text.lines().forEach { line ->
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = CustomTheme.colors.error)
+            }
+        }
+    }
+}
 
 @Composable
 private fun CreateActions(state: OrdersState, action: (OrdersAction) -> Unit, onSave: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onSave, Modifier.weight(1f).height(52.dp), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) { Text("Сохранить") }
-        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && state.basket.none { it.availability == Availability.Unavailable } && !state.isCreating, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Сохранение…" else if (state.editingOrderId != null) "Добавить блюда" else "Создать заказ  →") }
+        Button({ action(OrdersAction.Create) }, Modifier.weight(1.35f).height(52.dp), enabled = state.basket.isNotEmpty() && state.basket.none { it.availability == Availability.Unavailable } && !state.isCreating, shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = CustomTheme.colors.primary, contentColor = CustomTheme.colors.textOnPrimary)) { Text(if (state.isCreating) "Сохранение…" else if (state.editingOrderId != null) "Добавить блюда" else "Создать заказ") }
     }
 }
 
