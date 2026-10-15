@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StoqTextField(
     value: String,
